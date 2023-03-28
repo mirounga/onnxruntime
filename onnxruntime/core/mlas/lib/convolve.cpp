@@ -15,13 +15,13 @@ Abstract:
 --*/
 
 #include "mlasi.h"
+#include "sconv_kernel.h"
 
 //
 // Define the number of working buffer elements required per thread.
 //
 
-#define MLAS_CONV_WORKING_BUFFER_SIZE_PER_THREAD \
-    (MLAS_SGEMM_STRIDEN * MLAS_SGEMM_STRIDEK)
+#define MLAS_CONV_WORKING_BUFFER_SIZE_PER_THREAD (MLAS_SGEMM_STRIDEN * MLAS_SGEMM_STRIDEK)
 
 //
 // Define the parameters to execute segments of a convolution operation on
@@ -43,15 +43,13 @@ struct MLAS_CONV_WORK_BLOCK {
 };
 
 void
-MlasConvIm2Col(
-    const MLAS_CONV_PARAMETERS* Parameters,
-    const float* Input,
-    float* ColumnBuffer,
-    size_t k,
-    size_t CountK,
-    size_t n,
-    size_t CountN
-    )
+MlasConvIm2Col(const MLAS_CONV_PARAMETERS* Parameters,
+               const float* Input,
+               float* ColumnBuffer,
+               size_t k,
+               size_t CountK,
+               size_t n,
+               size_t CountN)
 /*++
 
 Routine Description:
@@ -123,7 +121,6 @@ Return Value:
     const size_t PaddingLeftX = Parameters->Padding[WidthShapeIndex];
 
     for (size_t EndingK = k + CountK; k < EndingK; k++) {
-
         size_t CountX = OutputCountX;
         size_t InputY = (ky * DilationHeight) + OriginInputY - PaddingLeftY;
         const size_t RowInitialInputX = (kx * DilationWidth) - PaddingLeftX;
@@ -131,7 +128,6 @@ Return Value:
         size_t RemainingN = CountN;
 
         do {
-
             if (CountX > RemainingN) {
                 CountX = RemainingN;
             }
@@ -143,24 +139,20 @@ Return Value:
             //
 
             if (InputY < InputHeight) {
-
                 size_t InputX = InitialInputX;
                 const float* InputRow = &Input[InputY * InputWidth];
 
                 do {
-
                     //
                     // Check if the input is in the left/right padding region.
                     //
 
                     if (InputX >= InputWidth) {
-
                         *ColumnBuffer++ = 0;
                         InputX += StrideWidth;
                         CountX--;
 
                     } else if (StrideWidth == 1) {
-
                         //
                         // Copy input elements to the column buffer.
                         //
@@ -186,14 +178,12 @@ Return Value:
                         }
 
                     } else if (InputX + CountX * StrideWidth <= InputWidth) {
-
                         do {
                             *ColumnBuffer++ = InputRow[InputX];
                             InputX += StrideWidth;
                         } while (--CountX > 0);
 
                     } else {
-
                         do {
                             *ColumnBuffer++ = (InputX < InputWidth) ? InputRow[InputX] : 0;
                             InputX += StrideWidth;
@@ -203,7 +193,6 @@ Return Value:
                 } while (CountX > 0);
 
             } else {
-
                 //
                 // The entire input row is in the padding region.
                 //
@@ -235,9 +224,7 @@ Return Value:
         //
 
         if (++kx == KernelWidth) {
-
             if (++ky == KernelHeight) {
-
                 Input += InputSize;
 
                 ky = 0;
@@ -249,15 +236,13 @@ Return Value:
 }
 
 void
-MlasConvVol2Col(
-    const MLAS_CONV_PARAMETERS* Parameters,
-    const float* Input,
-    float* ColumnBuffer,
-    size_t k,
-    size_t CountK,
-    size_t n,
-    size_t CountN
-    )
+MlasConvVol2Col(const MLAS_CONV_PARAMETERS* Parameters,
+                const float* Input,
+                float* ColumnBuffer,
+                size_t k,
+                size_t CountK,
+                size_t n,
+                size_t CountN)
 /*++
 
 Routine Description:
@@ -340,7 +325,6 @@ Return Value:
     const size_t PaddingLeftX = Parameters->Padding[WidthShapeIndex];
 
     for (size_t EndingK = k + CountK; k < EndingK; k++) {
-
         size_t CountY = OutputCountY;
         size_t CountX = OutputCountX;
         size_t InputZ = (kz * DilationDepth) + OriginInputZ - PaddingLeftZ;
@@ -351,7 +335,6 @@ Return Value:
         size_t RemainingN = CountN;
 
         do {
-
             if (CountX > RemainingN) {
                 CountX = RemainingN;
             }
@@ -363,24 +346,21 @@ Return Value:
             //
 
             if (InputY < InputHeight && InputZ < InputDepth) {
-
                 size_t InputX = InitialInputX;
-                const float* InputRow = &Input[InputZ * (InputHeight * InputWidth) + InputY * InputWidth];
+                const float* InputRow =
+                    &Input[InputZ * (InputHeight * InputWidth) + InputY * InputWidth];
 
                 do {
-
                     //
                     // Check if the input is in the left/right padding region.
                     //
 
                     if (InputX >= InputWidth) {
-
                         *ColumnBuffer++ = 0;
                         InputX += StrideWidth;
                         CountX--;
 
                     } else if (StrideWidth == 1) {
-
                         //
                         // Copy input elements to the column buffer.
                         //
@@ -406,14 +386,12 @@ Return Value:
                         }
 
                     } else if (InputX + CountX * StrideWidth <= InputWidth) {
-
                         do {
                             *ColumnBuffer++ = InputRow[InputX];
                             InputX += StrideWidth;
                         } while (--CountX > 0);
 
                     } else {
-
                         do {
                             *ColumnBuffer++ = (InputX < InputWidth) ? InputRow[InputX] : 0;
                             InputX += StrideWidth;
@@ -423,7 +401,6 @@ Return Value:
                 } while (CountX > 0);
 
             } else {
-
                 //
                 // The entire input row is in the padding region.
                 //
@@ -448,7 +425,6 @@ Return Value:
             InitialInputX = RowInitialInputX;
 
             if (--CountY == 0) {
-
                 InputY = RowInitialInputY;
                 InputZ += StrideDepth;
 
@@ -463,11 +439,8 @@ Return Value:
         //
 
         if (++kx == KernelWidth) {
-
             if (++ky == KernelHeight) {
-
                 if (++kz == KernelDepth) {
-
                     Input += InputSize;
 
                     kz = 0;
@@ -482,16 +455,14 @@ Return Value:
 }
 
 void
-MlasConvOperation(
-    const MLAS_CONV_PARAMETERS* Parameters,
-    const float* Input,
-    const float* Filter,
-    const float* Bias,
-    float* ColumnBuffer,
-    float* Output,
-    size_t SegmentStartN,
-    size_t SegmentCountN
-    )
+MlasConvOperation(const MLAS_CONV_PARAMETERS* Parameters,
+                  const float* Input,
+                  const float* Filter,
+                  const float* Bias,
+                  float* ColumnBuffer,
+                  float* Output,
+                  size_t SegmentStartN,
+                  size_t SegmentCountN)
 /*++
 
 Routine Description:
@@ -538,14 +509,12 @@ Return Value:
     uint32_t StrideK = MLAS_SGEMM_STRIDEK;
 
     if (SegmentCountN >= K) {
-
         while (StrideK / 2 >= K) {
             StrideN *= 2;
             StrideK /= 2;
         }
 
     } else {
-
         while (StrideN > 16 && StrideN / 2 >= SegmentCountN) {
             StrideK *= 2;
             StrideN /= 2;
@@ -559,7 +528,6 @@ Return Value:
     size_t CountN;
 
     for (size_t n = 0; n < SegmentCountN; n += CountN) {
-
         CountN = SegmentCountN - n;
 
         if (CountN > StrideN) {
@@ -575,7 +543,6 @@ Return Value:
         float* SegmentOutput = Output + SegmentStartN + n;
 
         for (size_t k = 0; k < K; k += CountK) {
-
             CountK = K - k;
 
             if (CountK > StrideK) {
@@ -583,16 +550,16 @@ Return Value:
             }
 
             if (Parameters->Dimensions == 2) {
-                MlasConvIm2Col(Parameters, Input, ColumnBuffer, k, CountK,
-                    SegmentStartN + n, CountN);
+                MlasConvIm2Col(Parameters, Input, ColumnBuffer, k, CountK, SegmentStartN + n,
+                               CountN);
             } else {
-                MlasConvVol2Col(Parameters, Input, ColumnBuffer, k, CountK,
-                    SegmentStartN + n, CountN);
+                MlasConvVol2Col(Parameters, Input, ColumnBuffer, k, CountK, SegmentStartN + n,
+                                CountN);
             }
 
-            MlasSgemmOperation(CblasNoTrans, CblasNoTrans, FilterCount, CountN,
-                CountK, 1.0f, Filter + k, K, ColumnBuffer, CountN, beta,
-                SegmentOutput, OutputSize);
+            MlasSgemmOperation(CblasNoTrans, CblasNoTrans, FilterCount, CountN, CountK, 1.0f,
+                               Filter + k, K, ColumnBuffer, CountN, beta, SegmentOutput,
+                               OutputSize);
 
             beta = 1.0f;
         }
@@ -601,16 +568,13 @@ Return Value:
         // Apply the activation with optional bias.
         //
 
-        MlasActivation(Parameters->Activation, SegmentOutput, Bias, FilterCount,
-            CountN, OutputSize);
+        MlasActivation(Parameters->Activation, SegmentOutput, Bias, FilterCount, CountN,
+                       OutputSize);
     }
 }
 
 void
-MlasConvOperationThreaded(
-    void* Context,
-    ptrdiff_t Index
-    )
+MlasConvOperationThreaded(void* Context, ptrdiff_t Index)
 /*++
 
 Routine Description:
@@ -637,16 +601,12 @@ Return Value:
     float* ColumnBuffer =
         WorkBlock->WorkingBuffer + Index * MLAS_CONV_WORKING_BUFFER_SIZE_PER_THREAD;
 
-    MlasConvOperation(WorkBlock->Parameters, WorkBlock->Input, WorkBlock->Filter,
-        WorkBlock->Bias, ColumnBuffer, WorkBlock->Output, Segment->StartN,
-        Segment->CountN);
+    MlasConvOperation(WorkBlock->Parameters, WorkBlock->Input, WorkBlock->Filter, WorkBlock->Bias,
+                      ColumnBuffer, WorkBlock->Output, Segment->StartN, Segment->CountN);
 }
 
 void
-MlasConvGemmDirectThreaded(
-    void* Context,
-    ptrdiff_t Index
-    )
+MlasConvGemmDirectThreaded(void* Context, ptrdiff_t Index)
 /*++
 
 Routine Description:
@@ -681,8 +641,8 @@ Return Value:
     size_t BatchGroupStart;
     size_t BatchGroupRemaining;
 
-    MlasPartitionWork(Index, WorkBlock->TargetThreadCount, BatchGroupCount,
-        &BatchGroupStart, &BatchGroupRemaining);
+    MlasPartitionWork(Index, WorkBlock->TargetThreadCount, BatchGroupCount, &BatchGroupStart,
+                      &BatchGroupRemaining);
 
     size_t BatchGroupEnd = BatchGroupStart + BatchGroupRemaining;
 
@@ -699,7 +659,6 @@ Return Value:
     const size_t FilterGroupSize = FilterCount * K;
 
     for (size_t bg = BatchGroupStart; bg < BatchGroupEnd; bg++) {
-
         size_t group = bg % GroupCount;
 
         const float* input = WorkBlock->Input + bg * InputGroupSize;
@@ -724,22 +683,111 @@ Return Value:
             bias += group * FilterCount;
         }
 
-        MlasActivation(Parameters->Activation, output, bias, FilterCount,
-            OutputSize, OutputSize);
+        MlasActivation(Parameters->Activation, output, bias, FilterCount, OutputSize, OutputSize);
     }
 }
 
-inline
-bool
-MlasConvTryMultithread(
-    const MLAS_CONV_PARAMETERS* Parameters,
-    const float* Input,
-    const float* Filter,
-    const float* Bias,
-    float* WorkingBuffer,
-    float* Output,
-    MLAS_THREADPOOL* ThreadPool
-    )
+void
+MlasConvSlidingSumThreaded(void* Context, ptrdiff_t Index)
+/*++
+
+Routine Description:
+
+    This routine is invoked from a worker thread to execute a segment of a
+    convolution operation.
+
+Arguments:
+
+    Context - Supplies the pointer to the context for the threaded operation.
+
+    Index - Supplies the current index of the threaded operation.
+
+Return Value:
+
+    None.
+
+--*/
+{
+    MLAS_CONV_WORK_BLOCK* WorkBlock = (MLAS_CONV_WORK_BLOCK*)Context;
+
+    const MLAS_CONV_PARAMETERS* Parameters = WorkBlock->Parameters;
+
+    //
+    // Compute the range of indices to use for this thread.
+    //
+
+    const size_t GroupCount = Parameters->GroupCount;
+    const size_t BatchGroupCount = Parameters->BatchCount * GroupCount;
+    const float Beta = Parameters->Beta;
+
+    size_t BatchGroupStart;
+    size_t BatchGroupRemaining;
+
+    MlasPartitionWork(Index, WorkBlock->TargetThreadCount, BatchGroupCount, &BatchGroupStart,
+                      &BatchGroupRemaining);
+
+    size_t BatchGroupEnd = BatchGroupStart + BatchGroupRemaining;
+
+    //
+    // Iterate over the batch and groups allocated to this thread.
+    //
+
+    const size_t FilterCount = Parameters->FilterCount;
+    const size_t OutputSize = Parameters->OutputSize;
+    const size_t K = Parameters->K;
+
+    const size_t InputGroupSize = Parameters->InputChannels * Parameters->InputSize;
+    const size_t OutputGroupSize = FilterCount * OutputSize;
+    const size_t FilterGroupSize = FilterCount * K;
+
+    for (size_t bg = BatchGroupStart; bg < BatchGroupEnd; bg++) {
+        size_t group = bg % GroupCount;
+
+        const float* input = WorkBlock->Input + bg * InputGroupSize;
+        const float* filter = WorkBlock->Filter + group * FilterGroupSize;
+        float* output = WorkBlock->Output + bg * OutputGroupSize;
+
+        //
+        // Invoke the non-threaded sliding kernel directly with the input tensor.
+        //
+        switch (Parameters->Dimensions) {
+            case 1:
+                MlasConv1DSlidingKernel(Parameters, input, filter, output);
+                break;
+
+            case 2:
+                MlasConv2DSlidingKernel(Parameters, input, filter, output);
+                break;
+
+            default:
+                MlasSgemmOperation(CblasNoTrans, Parameters->u.GemmDirect.TransB, FilterCount,
+                                   OutputSize, K, 1.0f, filter, K, input,
+                                   Parameters->u.GemmDirect.ldb, Beta, output, OutputSize);
+                break;
+        }
+
+        //
+        // Apply the activation with optional bias.
+        //
+
+        const float* bias = WorkBlock->Bias;
+
+        if (bias != nullptr) {
+            bias += group * FilterCount;
+        }
+
+        MlasActivation(Parameters->Activation, output, bias, FilterCount, OutputSize, OutputSize);
+    }
+}
+
+inline bool
+MlasConvTryMultithread(const MLAS_CONV_PARAMETERS* Parameters,
+                       const float* Input,
+                       const float* Filter,
+                       const float* Bias,
+                       float* WorkingBuffer,
+                       float* Output,
+                       MLAS_THREADPOOL* ThreadPool)
 /*++
 
 Routine Description:
@@ -801,7 +849,6 @@ Return Value:
     size_t SegmentCountN;
 
     for (size_t SegmentStartN = 0; SegmentStartN < OutputSize; SegmentStartN += SegmentCountN) {
-
         SegmentCountN = OutputSize - SegmentStartN;
 
         if (SegmentCountN > ThreadStrideN) {
@@ -819,17 +866,14 @@ Return Value:
     return true;
 }
 
-void
-MLASCALL
-MlasConv(
-    const MLAS_CONV_PARAMETERS* Parameters,
-    const float* Input,
-    const float* Filter,
-    const float* Bias,
-    float* WorkingBuffer,
-    float* Output,
-    MLAS_THREADPOOL* ThreadPool
-    )
+void MLASCALL
+MlasConv(const MLAS_CONV_PARAMETERS* Parameters,
+         const float* Input,
+         const float* Filter,
+         const float* Bias,
+         float* WorkingBuffer,
+         float* Output,
+         MLAS_THREADPOOL* ThreadPool)
 /*++
 
 Routine Description:
@@ -875,11 +919,38 @@ Return Value:
     const MLAS_CONV_ALGORITHM Algorithm = Parameters->Algorithm;
 
     //
+    // Schedule batches of Sliding Sums across multiple threads.
+    //
+
+    if (Algorithm == MlasConvAlgorithmSlidingSum) {
+        const size_t BatchGroupCount = BatchCount * GroupCount;
+
+        ptrdiff_t TargetThreadCount = MlasGetMaximumThreadCount(ThreadPool);
+
+        if (size_t(TargetThreadCount) >= BatchGroupCount) {
+            TargetThreadCount = ptrdiff_t(BatchGroupCount);
+        }
+
+        MLAS_CONV_WORK_BLOCK WorkBlock;
+
+        WorkBlock.Parameters = Parameters;
+        WorkBlock.Input = Input;
+        WorkBlock.Filter = Filter;
+        WorkBlock.Bias = Bias;
+        WorkBlock.WorkingBuffer = nullptr;
+        WorkBlock.Output = Output;
+        WorkBlock.TargetThreadCount = TargetThreadCount;
+
+        MlasExecuteThreaded(MlasConvSlidingSumThreaded, &WorkBlock, TargetThreadCount, ThreadPool);
+
+        return;
+    }
+
+    //
     // Schedule batches of GEMMs across multiple threads.
     //
 
     if (Algorithm == MlasConvAlgorithmGemmDirect && ((BatchCount > 1) || (GroupCount > 1))) {
-
         const size_t BatchGroupCount = BatchCount * GroupCount;
 
         ptrdiff_t TargetThreadCount = MlasGetMaximumThreadCount(ThreadPool);
@@ -917,20 +988,16 @@ Return Value:
     // Iterate over each batch and group.
     //
     for (size_t batch = 0; batch < BatchCount; batch++) {
-
         const float* filter = Filter;
         const float* bias = Bias;
 
         for (size_t group = 0; group < GroupCount; group++) {
-
             //
             // Dispatch the convolution.
             //
 
             switch (Algorithm) {
-
-                case MlasConvAlgorithmGemmDirect:
-                {
+                case MlasConvAlgorithmGemmDirect: {
                     //
                     // Invoke the threaded GEMM directly with the input tensor.
                     //
@@ -943,14 +1010,13 @@ Return Value:
                     // Apply the activation with optional bias.
                     //
 
-                    MlasActivation(Parameters->Activation, Output, bias, FilterCount,
-                        OutputSize, OutputSize);
+                    MlasActivation(Parameters->Activation, Output, bias, FilterCount, OutputSize,
+                                   OutputSize);
 
                     break;
                 }
 
-                case MlasConvAlgorithmExpandThenGemm:
-                {
+                case MlasConvAlgorithmExpandThenGemm: {
                     //
                     // Expand the input tensor to the working buffer and then invoke the
                     // threaded GEMM.
@@ -970,34 +1036,33 @@ Return Value:
                     // Apply the activation with optional bias.
                     //
 
-                    MlasActivation(Parameters->Activation, Output, bias, FilterCount,
-                        OutputSize, OutputSize);
+                    MlasActivation(Parameters->Activation, Output, bias, FilterCount, OutputSize,
+                                   OutputSize);
 
                     break;
                 }
 
 #if defined(MLAS_TARGET_WASM_SCALAR)
 
-                case MlasConvAlgorithmDepthwise:
-                {
+                case MlasConvAlgorithmDepthwise: {
                     MlasConvDepthwiseFloat_CHW(Parameters, Input, filter, Output, WorkingBuffer);
-                    MlasActivation(Parameters->Activation, Output, bias, FilterCount, OutputSize, OutputSize);
+                    MlasActivation(Parameters->Activation, Output, bias, FilterCount, OutputSize,
+                                   OutputSize);
                     break;
                 }
 
 #endif
 
-                case MlasConvAlgorithmExpandThenGemmSegmented:
-                {
+                case MlasConvAlgorithmExpandThenGemmSegmented: {
                     //
                     // Attempt to launch the convolution across multiple threads or fall
                     // back to a single thread.
                     //
 
                     if (!MlasConvTryMultithread(Parameters, Input, filter, bias, WorkingBuffer,
-                        Output, ThreadPool)) {
-                        MlasConvOperation(Parameters, Input, filter, bias, WorkingBuffer,
-                            Output, 0, OutputSize);
+                                                Output, ThreadPool)) {
+                        MlasConvOperation(Parameters, Input, filter, bias, WorkingBuffer, Output, 0,
+                                          OutputSize);
                     }
 
                     break;
@@ -1023,26 +1088,23 @@ Return Value:
 // Chance of arithmetic overflow could be reduced
 #pragma warning(disable : 26451)
 #endif
-void
-MLASCALL
-MlasConvPrepare(
-    MLAS_CONV_PARAMETERS* Parameters,
-    size_t Dimensions,
-    size_t BatchCount,
-    size_t GroupCount,
-    size_t InputChannels,
-    const int64_t* InputShape,
-    const int64_t* KernelShape,
-    const int64_t* DilationShape,
-    const int64_t* Padding,
-    const int64_t* StrideShape,
-    const int64_t* OutputShape,
-    size_t FilterCount,
-    const MLAS_ACTIVATION* Activation,
-    size_t* WorkingBufferSize,
-    float Beta,
-    MLAS_THREADPOOL* ThreadPool
-    )
+void MLASCALL
+MlasConvPrepare(MLAS_CONV_PARAMETERS* Parameters,
+                size_t Dimensions,
+                size_t BatchCount,
+                size_t GroupCount,
+                size_t InputChannels,
+                const int64_t* InputShape,
+                const int64_t* KernelShape,
+                const int64_t* DilationShape,
+                const int64_t* Padding,
+                const int64_t* StrideShape,
+                const int64_t* OutputShape,
+                size_t FilterCount,
+                const MLAS_ACTIVATION* Activation,
+                size_t* WorkingBufferSize,
+                float Beta,
+                MLAS_THREADPOOL* ThreadPool)
 /*++
 
 Routine Description:
@@ -1098,6 +1160,7 @@ Return Value:
     // Save the convolution parameters.
     //
 
+    Parameters->Dimensions = Dimensions;
     Parameters->Activation = Activation;
     Parameters->BatchCount = BatchCount;
     Parameters->GroupCount = GroupCount;
@@ -1114,7 +1177,6 @@ Return Value:
     bool AllPaddingIsZero = true;
 
     for (size_t dim = 0; dim < Dimensions; dim++) {
-
         Parameters->InputShape[dim] = size_t(InputShape[dim]);
         Parameters->OutputShape[dim] = size_t(OutputShape[dim]);
         Parameters->KernelShape[dim] = size_t(KernelShape[dim]);
@@ -1129,19 +1191,27 @@ Return Value:
 
         AllStridesAreOne &= (Parameters->StrideShape[dim] == 1);
         AllDilationsAreOne &= (Parameters->DilationShape[dim] == 1);
-        AllPaddingIsZero &= (Parameters->Padding[dim] == 0 && Parameters->Padding[dim + Dimensions] == 0);
+        AllPaddingIsZero &=
+            (Parameters->Padding[dim] == 0 && Parameters->Padding[dim + Dimensions] == 0);
     }
 
     Parameters->InputSize = InputSize;
     Parameters->OutputSize = OutputSize;
     Parameters->K = K;
 
+    if (AllStridesAreOne && AllDilationsAreOne) {
+        if (((Dimensions == 1) && (KernelShape[0] <= 64)) || ((Dimensions == 2) && (KernelShape[1] <= 32)))
+        {
+            Parameters->Algorithm = MlasConvAlgorithmSlidingSum;
+            return;
+        }
+    }
+
     //
     // Promote 1D convolutions to 2D convolutions.
     //
 
     if (Dimensions == 1) {
-
         Parameters->InputShape[1] = Parameters->InputShape[0];
         Parameters->InputShape[0] = 1;
         Parameters->OutputShape[1] = Parameters->OutputShape[0];
@@ -1169,13 +1239,11 @@ Return Value:
     *WorkingBufferSize = 0;
 
     if (AllStridesAreOne && AllPaddingIsZero) {
-
         //
         // Detect a pointwise convolution.
         //
 
         if (K == InputChannels) {
-
             Parameters->Algorithm = MlasConvAlgorithmGemmDirect;
             Parameters->u.GemmDirect.TransB = CblasNoTrans;
             Parameters->u.GemmDirect.ldb = OutputSize;
@@ -1184,14 +1252,12 @@ Return Value:
         }
 
         if (Dimensions == 2 && AllDilationsAreOne && InputChannels == 1) {
-
             //
             // Detect convolutions where the kernel is using the entire input
             // width or height.
             //
 
             if (Parameters->KernelShape[1] == Parameters->InputShape[1]) {
-
                 Parameters->Algorithm = MlasConvAlgorithmGemmDirect;
                 Parameters->u.GemmDirect.TransB = CblasTrans;
                 Parameters->u.GemmDirect.ldb = Parameters->InputShape[1];
@@ -1201,7 +1267,6 @@ Return Value:
 
             if (Parameters->KernelShape[0] == Parameters->InputShape[0] &&
                 Parameters->KernelShape[1] == 1) {
-
                 Parameters->Algorithm = MlasConvAlgorithmGemmDirect;
                 Parameters->u.GemmDirect.TransB = CblasNoTrans;
                 Parameters->u.GemmDirect.ldb = Parameters->InputShape[1];
@@ -1212,7 +1277,6 @@ Return Value:
     }
 
     if (FilterCount > OutputSize) {
-
         //
         // The filter count is larger than the output dimensions, so perform the
         // full matrix expansion and then invoke the threaded GEMM.
@@ -1223,20 +1287,17 @@ Return Value:
         *WorkingBufferSize = OutputSize * K;
 
     } else {
-
 #if defined(MLAS_TARGET_WASM_SCALAR)
 
         // Scalar direct conv for depthwise convolution.
         // Currently only support 3x3 kernel with padding <=1 and dilations = 1.
         // TODO: support more general depthwise convolution.
 
-        if (Dimensions == 2
-                && Parameters->FilterCount == 1 && Parameters->InputChannels == 1
-                && Parameters->KernelShape[0] == 3 && Parameters->KernelShape[1] == 3
-                && Parameters->Padding[0] <= 1 && Parameters->Padding[1] <= 1
-                && Parameters->Padding[2] <= 1 && Parameters->Padding[3] <= 1
-                && Parameters->DilationShape[0] == 1 && Parameters->DilationShape[1] == 1) {
-
+        if (Dimensions == 2 && Parameters->FilterCount == 1 && Parameters->InputChannels == 1 &&
+            Parameters->KernelShape[0] == 3 && Parameters->KernelShape[1] == 3 &&
+            Parameters->Padding[0] <= 1 && Parameters->Padding[1] <= 1 &&
+            Parameters->Padding[2] <= 1 && Parameters->Padding[3] <= 1 &&
+            Parameters->DilationShape[0] == 1 && Parameters->DilationShape[1] == 1) {
             *WorkingBufferSize = Parameters->InputShape[1] + 2;
             Parameters->Algorithm = MlasConvAlgorithmDepthwise;
             return;
@@ -1279,8 +1340,8 @@ Return Value:
         }
 
         if (TargetThreadCount > 1) {
-
-            StrideN = (StrideN + MLAS_SGEMM_STRIDEN_THREAD_ALIGN - 1) & ~(MLAS_SGEMM_STRIDEN_THREAD_ALIGN - 1);
+            StrideN = (StrideN + MLAS_SGEMM_STRIDEN_THREAD_ALIGN - 1) &
+                      ~(MLAS_SGEMM_STRIDEN_THREAD_ALIGN - 1);
 
             if (StrideN >= OutputSize) {
                 TargetThreadCount = 1;

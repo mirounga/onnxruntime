@@ -15,35 +15,7 @@ Abstract:
 --*/
 
 #include "mlasi.h"
-
-//
-// Define the parameters to execute segments of a pooling operation on worker
-// threads.
-//
-
-struct MLAS_POOL_WORK_BLOCK
-{
-    MLAS_POOLING_KIND PoolingKind;
-    size_t InputShape[3];
-    size_t InputSize;
-    size_t OutputShape[3];
-    int64_t KernelShape[3];
-    int64_t Padding[6];
-    int64_t StrideShape[3];
-};
-
-//
-// Define the prototype of the pooling kernel routine.
-//
-
-typedef
-void
-(MLAS_POOL_KERNEL_ROUTINE)(
-    const MLAS_POOL_WORK_BLOCK* WorkBlock,
-    size_t ChannelCount,
-    const float* Input,
-    float* Output
-    );
+#include "spool_kernel.h"
 
 //
 // Define the number of elements to allocate on the stack for the reduction
@@ -1102,18 +1074,21 @@ static MLAS_POOL_KERNEL_ROUTINE* const MlasPoolGlobalKernels[] =
     MlasPoolGlobalKernel<MLAS_AVERAGE_POOLING>,
 };
 
-static MLAS_POOL_KERNEL_ROUTINE* const MlasPoolVectorKernels[][2] =
+static MLAS_POOL_KERNEL_ROUTINE* const MlasPoolVectorKernels[][3] =
 {
     {
-        MlasPool2DVectorKernel<MLAS_MAXIMUM_POOLING>,
+        MlasPool1DSlidingKernelMax,
+        MlasPool2DSlidingKernelMax,
         MlasPool3DVectorKernel<MLAS_MAXIMUM_POOLING>,
     },
     {
-        MlasPool2DVectorKernel<MLAS_AVERAGE_POOLING>,
+        MlasPool1DSlidingKernelAvgNoPad,
+        MlasPool2DSlidingKernelAvgNoPad,
         MlasPool3DVectorKernel<MLAS_AVERAGE_POOLING>,
     },
     {
-        MlasPool2DVectorKernel<MLAS_AVERAGE_POOLING>,
+        MlasPool1DSlidingKernelAvgWithPad,
+        MlasPool2DSlidingKernelAvgWithPad,
         MlasPool3DVectorKernel<MLAS_AVERAGE_POOLING>,
     },
 };
@@ -1199,6 +1174,7 @@ Return Value:
     }
 
     for (size_t dim = 0; dim < Dimensions; dim++) {
+
         WorkBlock.InputShape[dim] = size_t(InputShape[dim]);
         WorkBlock.OutputShape[dim] = size_t(OutputShape[dim]);
 
@@ -1248,7 +1224,11 @@ Return Value:
 
         PoolKernelRoutine = MlasPoolGlobalKernels[PoolingKind];
 
-    } else if (Dimensions >= 2 && WorkBlock.StrideShape[Dimensions - 1] <= 2 && AllKernelsAreSmall) {
+    } else if ((Dimensions <= 2) && AllStridesAreOne && AllKernelsAreSmall) {
+
+        PoolKernelRoutine = MlasPoolVectorKernels[PoolingKind][Dimensions - 1];
+
+    } else if (Dimensions == 3 && WorkBlock.StrideShape[Dimensions - 1] <= 2 && AllKernelsAreSmall) {
 
         int64_t ReductionBufferRemaining = MLAS_POOL_REDUCTION_BUFFER_STACK - MLAS_POOL_REDUCTION_BUFFER_PADDING;
 
