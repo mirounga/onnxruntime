@@ -1,3 +1,19 @@
+/*++
+
+Copyright (c) Microsoft Corporation.  All rights reserved.
+
+Licensed under the MIT License.
+
+Module Name:
+
+    spool_kernel.h
+
+Abstract:
+
+    This module contains the private data structures and procedure prototypes
+    for the pooling primitives.
+
+--*/
 
 //
 // Define the parameters to execute segments of a pooling operation on worker
