@@ -158,6 +158,7 @@ enum MLAS_ACTIVATION_KIND {
     MlasLogisticActivation,
     MlasClipActivation,
     MlasHardSigmoidActivation,
+    MlasActivationKindCount,
 };
 
 struct MLAS_ACTIVATION {
@@ -771,6 +772,7 @@ struct MLAS_CONV_PARAMETERS {
     size_t OutputShape[3];
     size_t InputSize;
     size_t OutputSize;
+    size_t KernelSize;
     size_t K;
     float Beta;
     MLAS_CONV_ALGORITHM Algorithm;

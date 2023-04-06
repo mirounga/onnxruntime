@@ -908,6 +908,8 @@ MlasPool2DSlidingKernelMaxK17S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
     MLAS_UNREFERENCED_PARAMETER(InputHeight);
     MLAS_UNREFERENCED_PARAMETER(PaddingRight);
 
+    const int64_t OutputHeightBase = OutputHeight - KernelHeight + 1;
+
     constexpr size_t widthStep = 16;
 
     const int64_t paddingLeftSeek = KernelWidth - PaddingLeft - 1;
@@ -957,7 +959,7 @@ MlasPool2DSlidingKernelMaxK17S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
             pOutputRow += OutputWidth;
         }
 
-        for (int64_t i = PaddingTop; i < KernelHeight; i++) {
+        for (int64_t i = PaddingTop; i < KernelHeight - 1; i++) {
             const float* pInput0 = pInputRow;
 
             float* pOutput0 = pOutputRow;
@@ -1094,7 +1096,7 @@ MlasPool2DSlidingKernelMaxK17S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
         }
 
         // Outer loop
-        for (size_t i = KernelHeight; i < OutputHeight; i++) {
+        for (int64_t i = 0; i < OutputHeightBase; i++) {
             const float* pInput0 = pInputRow;
 
             float* pOutput0 = pOutputRow;
@@ -1397,14 +1399,14 @@ MlasPool2DSlidingKernelMaxK3x3S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
     MLAS_UNREFERENCED_PARAMETER(InputHeight);
     MLAS_UNREFERENCED_PARAMETER(PaddingRight);
 
-    constexpr size_t heightStep = 4;
+    constexpr int64_t heightStep = 4;
 
-    const int64_t OutputHeightBase = OutputHeight - KernelHeight;
+    const int64_t OutputHeightBase = OutputHeight - KernelHeight + 1;
 
-    const size_t heightIterations = OutputHeightBase / heightStep;
-    const size_t heightRemainder = OutputHeightBase % heightStep;
+    const int64_t heightIterations = OutputHeightBase / heightStep;
+    const int64_t heightRemainder = OutputHeightBase % heightStep;
 
-    constexpr size_t widthStep = 16;
+    constexpr int64_t widthStep = 16;
 
     const int64_t paddingLeftSeek = KernelWidth - PaddingLeft - 1;
 
@@ -1454,7 +1456,7 @@ MlasPool2DSlidingKernelMaxK3x3S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
             pOutputRow += OutputWidth;
         }
 
-        for (int64_t i = PaddingTop; i < KernelHeight; i++) {
+        for (int64_t i = PaddingTop; i < KernelHeight - 1; i++) {
             const float* pInput0 = pInputRow;
 
             float* pOutput0 = pOutputRow;
@@ -1559,7 +1561,7 @@ MlasPool2DSlidingKernelMaxK3x3S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
         }
 
         // Main Outer Loop
-        for (size_t i = 0; i < heightIterations; i++) {
+        for (int64_t i = 0; i < heightIterations; i++) {
             const float* pInput0 = pInputRow;
             const float* pInput1 = pInput0 + InputWidth;
             const float* pInput2 = pInput1 + InputWidth;
@@ -1774,7 +1776,7 @@ MlasPool2DSlidingKernelMaxK3x3S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
         }
 
         // Outer Tail
-        for (size_t i = 0; i < heightRemainder; i++) {
+        for (int64_t i = 0; i < heightRemainder; i++) {
             const float* pInput0 = pInputRow;
 
             float* pOutput0 = pOutputRow;
@@ -2013,14 +2015,14 @@ MlasPool2DSlidingKernelMaxK5x5S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
     MLAS_UNREFERENCED_PARAMETER(InputHeight);
     MLAS_UNREFERENCED_PARAMETER(PaddingRight);
 
-    constexpr size_t heightStep = 4;
+    constexpr int64_t heightStep = 4;
 
-    const int64_t OutputHeightBase = OutputHeight - KernelHeight;
+    const int64_t OutputHeightBase = OutputHeight - KernelHeight + 1;
 
-    const size_t heightIterations = OutputHeightBase / heightStep;
-    const size_t heightRemainder = OutputHeightBase % heightStep;
+    const int64_t heightIterations = OutputHeightBase / heightStep;
+    const int64_t heightRemainder = OutputHeightBase % heightStep;
 
-    constexpr size_t widthStep = 16;
+    constexpr int64_t widthStep = 16;
 
     const int64_t paddingLeftSeek = KernelWidth - PaddingLeft - 1;
 
@@ -2074,7 +2076,7 @@ MlasPool2DSlidingKernelMaxK5x5S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
             pOutputRow += OutputWidth;
         }
 
-        for (int64_t i = PaddingTop; i < KernelHeight; i++) {
+        for (int64_t i = PaddingTop; i < KernelHeight - 1; i++) {
             const float* pInput0 = pInputRow;
 
             float* pOutput0 = pOutputRow;
@@ -2203,7 +2205,7 @@ MlasPool2DSlidingKernelMaxK5x5S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
         }
 
         // Main Outer Loop
-        for (size_t i = 0; i < heightIterations; i++) {
+        for (int64_t i = 0; i < heightIterations; i++) {
             const float* pInput0 = pInputRow;
             const float* pInput1 = pInput0 + InputWidth;
             const float* pInput2 = pInput1 + InputWidth;
@@ -2505,7 +2507,7 @@ MlasPool2DSlidingKernelMaxK5x5S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
         }
 
         // Outer Tail
-        for (size_t i = 0; i < heightRemainder; i++) {
+        for (int64_t i = 0; i < heightRemainder; i++) {
             const float* pInput0 = pInputRow;
 
             float* pOutput0 = pOutputRow;
@@ -2808,7 +2810,9 @@ MlasPool2DSlidingKernelMaxK32S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
     MLAS_UNREFERENCED_PARAMETER(InputHeight);
     MLAS_UNREFERENCED_PARAMETER(PaddingRight);
 
-    constexpr size_t widthStep = 32;
+	const int64_t OutputHeightBase = OutputHeight - KernelHeight + 1;
+
+    constexpr int64_t widthStep = 32;
 
     const int64_t paddingLeftSeek = KernelWidth - PaddingLeft - 1;
 
@@ -2875,7 +2879,7 @@ MlasPool2DSlidingKernelMaxK32S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
             pOutputRow += OutputWidth;
         }
 
-        for (int64_t i = PaddingTop; i < KernelHeight; i++) {
+        for (int64_t i = PaddingTop; i < KernelHeight - 1; i++) {
             const float* pInput0 = pInputRow;
 
             float* pOutput0 = pOutputRow;
@@ -3099,7 +3103,7 @@ MlasPool2DSlidingKernelMaxK32S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
         }
 
         // Outer loop
-        for (size_t i = KernelHeight; i < OutputHeight; i++) {
+        for (int64_t i = 0; i < OutputHeightBase; i++) {
             const float* pInput0 = pInputRow;
 
             float* pOutput0 = pOutputRow;
@@ -3590,6 +3594,8 @@ MlasPool2DSlidingKernelAvgWithPadK17S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
     MLAS_UNREFERENCED_PARAMETER(InputHeight);
     MLAS_UNREFERENCED_PARAMETER(PaddingRight);
 
+	const int64_t OutputHeightBase = OutputHeight - KernelHeight + 1;
+
     constexpr size_t widthStep = 16;
 
     const int64_t paddingLeftSeek = KernelWidth - PaddingLeft - 1;
@@ -3641,7 +3647,7 @@ MlasPool2DSlidingKernelAvgWithPadK17S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
             pOutputRow += OutputWidth;
         }
 
-        for (int64_t i = PaddingTop; i < KernelHeight; i++) {
+        for (int64_t i = PaddingTop; i < KernelHeight - 1; i++) {
             const float* pInput0 = pInputRow;
 
             float* pOutput0 = pOutputRow;
@@ -3783,7 +3789,7 @@ MlasPool2DSlidingKernelAvgWithPadK17S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
         }
 
         // Outer loop
-        for (size_t i = KernelHeight; i < OutputHeight; i++) {
+        for (int64_t i = 0; i < OutputHeightBase; i++) {
             const float* pInput0 = pInputRow;
 
             float* pOutput0 = pOutputRow;
@@ -4094,6 +4100,8 @@ MlasPool2DSlidingKernelAvgWithPadK32S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
     MLAS_UNREFERENCED_PARAMETER(InputHeight);
     MLAS_UNREFERENCED_PARAMETER(PaddingRight);
 
+	const int64_t OutputHeightBase = OutputHeight - KernelHeight + 1;
+
     constexpr size_t widthStep = 32;
 
     const int64_t paddingLeftSeek = KernelWidth - PaddingLeft - 1;
@@ -4163,7 +4171,7 @@ MlasPool2DSlidingKernelAvgWithPadK32S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
             pOutputRow += OutputWidth;
         }
 
-        for (int64_t i = PaddingTop; i < KernelHeight; i++) {
+        for (int64_t i = PaddingTop; i < KernelHeight - 1; i++) {
             const float* pInput0 = pInputRow;
 
             float* pOutput0 = pOutputRow;
@@ -4393,7 +4401,7 @@ MlasPool2DSlidingKernelAvgWithPadK32S1(const MLAS_POOL_WORK_BLOCK* WorkBlock,
         }
 
         // Outer loop
-        for (size_t i = KernelHeight; i < OutputHeight; i++) {
+        for (int64_t i = 0; i < OutputHeightBase; i++) {
             const float* pInput0 = pInputRow;
 
             float* pOutput0 = pOutputRow;
