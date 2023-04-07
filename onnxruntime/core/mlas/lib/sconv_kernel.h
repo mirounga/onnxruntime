@@ -15,14 +15,14 @@ Abstract:
 
 --*/
 
+typedef
 void
-MlasConv1DSlidingKernel(const MLAS_CONV_PARAMETERS* Parameters,
-                           const float* Input,
-                           const float* Filter,
-                           float* Output);
+(MLAS_CONV_KERNEL_ROUTINE)(
+    const MLAS_CONV_PARAMETERS* Parameters,
+    const float* Input,
+    const float* Filter,
+    float* Output
+    );
 
-void
-MlasConv2DSlidingKernel(const MLAS_CONV_PARAMETERS* Parameters,
-                           const float* Input,
-                           const float* Filter,
-                           float* Output);
+MLAS_CONV_KERNEL_ROUTINE*
+MlasGetSlidingConvolutionKernel(const MLAS_CONV_PARAMETERS* Parameters);

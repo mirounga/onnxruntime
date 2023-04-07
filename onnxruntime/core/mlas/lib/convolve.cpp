@@ -760,7 +760,6 @@ Return Value:
     const size_t GroupCount = Parameters->GroupCount;
     const size_t GroupFilterCount = Parameters->FilterCount * GroupCount;
     const size_t BatchGroupFilterCount = Parameters->BatchCount * GroupFilterCount;
-    const float Beta = Parameters->Beta;
 
     size_t BatchGroupFilterStart;
     size_t BatchGroupFilterRemaining;
@@ -778,11 +777,12 @@ Return Value:
     const size_t InputSize = Parameters->InputSize;
     const size_t OutputSize = Parameters->OutputSize;
     const size_t KernelSize = Parameters->KernelSize;
-    const size_t K = Parameters->K;
 
     const size_t InputChannels = Parameters->InputChannels;
     const size_t InputGroupSize = InputChannels * InputSize;
     const size_t FilterGroupSize = InputChannels * KernelSize;
+
+    MLAS_CONV_KERNEL_ROUTINE* ConvKernel = MlasGetSlidingConvolutionKernel(Parameters);
 
     for (size_t bgf = BatchGroupFilterStart; bgf < BatchGroupFilterEnd; bgf++) {
         size_t bg = bgf / FilterCount;
@@ -806,21 +806,8 @@ Return Value:
             //
             // Invoke the non-threaded sliding kernel directly with the input tensor.
             //
-            switch (Parameters->Dimensions) {
-                case 1:
-                    MlasConv1DSlidingKernel(Parameters, input, filter, output);
-                    break;
 
-                case 2:
-                    MlasConv2DSlidingKernel(Parameters, input, filter, output);
-                    break;
-
-                default:
-                    MlasSgemmOperation(CblasNoTrans, Parameters->u.GemmDirect.TransB, FilterCount,
-                                       OutputSize, K, 1.0f, filter, K, input,
-                                       Parameters->u.GemmDirect.ldb, Beta, output, OutputSize);
-                    break;
-            }
+            ConvKernel(Parameters, input, filter, output);
 
             input += InputSize;
             filter += KernelSize;
@@ -1273,12 +1260,10 @@ Return Value:
 
     *WorkingBufferSize = 0;
 
-    if (AllStridesAreOne && AllDilationsAreOne) {
-        if (((Dimensions == 1) && (KernelShape[0] <= 64)) ||
-            ((Dimensions == 2) && (KernelShape[1] <= 32))) {
-            Parameters->Algorithm = MlasConvAlgorithmSlidingSum;
-            return;
-        }
+    if (AllStridesAreOne && AllDilationsAreOne && (KernelShape[Dimensions - 1] <= 64)) {
+        Parameters->Dimensions = Dimensions;
+        Parameters->Algorithm = MlasConvAlgorithmSlidingSum;
+        return;
     }
 
     //
@@ -1396,7 +1381,7 @@ Return Value:
         //
 
         ptrdiff_t TargetThreadCount;
-        double Complexity = double(FilterCount) * double(OutputSize) * double(K);
+        double Complexity = double(FilterCount) * double(OutputSize) * double(Parameters->K);
 
         if (Complexity < double(MLAS_SGEMM_THREAD_COMPLEXITY * MLAS_MAXIMUM_THREAD_COUNT)) {
             TargetThreadCount = ptrdiff_t(Complexity / double(MLAS_SGEMM_THREAD_COMPLEXITY)) + 1;
