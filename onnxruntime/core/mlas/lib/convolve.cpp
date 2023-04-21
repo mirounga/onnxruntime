@@ -729,7 +729,7 @@ Return Value:
 }
 
 void
-MlasConvSlidingSumThreaded(void* Context, ptrdiff_t Index)
+MlasConvSlidingThreaded(void* Context, ptrdiff_t Index)
 /*++
 
 Routine Description:
@@ -802,15 +802,24 @@ Return Value:
 
         std::fill(output, output + OutputSize, bias_value);
 
-        for (size_t ic = 0; ic < InputChannels; ic++) {
+        if (KernelSize == 1) {
+            //
+            // Invoke the non-threaded pointwise kernel directly with the input tensor.
+            //
+
+            ConvKernel(Parameters, input, filter, output);
+        } else {
             //
             // Invoke the non-threaded sliding kernel directly with the input tensor.
             //
 
-            ConvKernel(Parameters, input, filter, output);
+            for (size_t ic = 0; ic < InputChannels; ic++) {
 
-            input += InputSize;
-            filter += KernelSize;
+                ConvKernel(Parameters, input, filter, output);
+
+                input += InputSize;
+                filter += KernelSize;
+            }
         }
 
         //
@@ -990,7 +999,7 @@ Return Value:
         WorkBlock.Output = Output;
         WorkBlock.TargetThreadCount = TargetThreadCount;
 
-        MlasExecuteThreaded(MlasConvSlidingSumThreaded, &WorkBlock, TargetThreadCount, ThreadPool);
+        MlasExecuteThreaded(MlasConvSlidingThreaded, &WorkBlock, TargetThreadCount, ThreadPool);
 
         return;
     }
