@@ -7,7 +7,17 @@ set(MLAS_SRC_DIR ${ONNXRUNTIME_ROOT}/core/mlas/lib)
 set(MLAS_AMX_SUPPORTED FALSE)
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_C_COMPILER_VERSION VERSION_GREATER_EQUAL 11)
-  set(MLAS_AMX_SUPPORTED TRUE)
+  # match assembler version, AMX instructions are supported from 2.38
+  if (CMAKE_ASM_COMPILER_ID STREQUAL "GNU")
+    execute_process(
+        COMMAND as --version
+        OUTPUT_VARIABLE _as_version
+    )
+    # 2.38 or later
+    if (_as_version MATCHES "GNU.[Aa]ssembler.*(2\\.38|2\\.39|2\\.[4-9][0-9]|[3-9]\\.[0-9][0-9])")
+        set(MLAS_AMX_SUPPORTED TRUE)
+    endif()
+  endif()
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
@@ -34,7 +44,6 @@ onnxruntime_add_static_library(onnxruntime_mlas
   ${MLAS_SRC_DIR}/reorder.cpp
   ${MLAS_SRC_DIR}/snchwc.cpp
   ${MLAS_SRC_DIR}/activate.cpp
-  ${MLAS_SRC_DIR}/activate_fp16.cpp
   ${MLAS_SRC_DIR}/logistic.cpp
   ${MLAS_SRC_DIR}/tanh.cpp
   ${MLAS_SRC_DIR}/erf.cpp
