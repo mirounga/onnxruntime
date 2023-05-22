@@ -79,3 +79,21 @@ MlasPool2DSlidingKernelAvgNoPad(const MLAS_POOL_WORK_BLOCK* WorkBlock,
                                 size_t ChannelCount,
                                 const float* Input,
                                 float* Output);
+
+void
+MlasPool3DSlidingKernelMax(const MLAS_POOL_WORK_BLOCK* WorkBlock,
+                           size_t ChannelCount,
+                           const float* Input,
+                           float* Output);
+
+void
+MlasPool3DSlidingKernelAvgWithPad(const MLAS_POOL_WORK_BLOCK* WorkBlock,
+                                  size_t ChannelCount,
+                                  const float* Input,
+                                  float* Output);
+
+void
+MlasPool3DSlidingKernelAvgNoPad(const MLAS_POOL_WORK_BLOCK* WorkBlock,
+                                size_t ChannelCount,
+                                const float* Input,
+                                float* Output);
