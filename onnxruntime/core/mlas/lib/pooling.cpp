@@ -1079,18 +1079,25 @@ static MLAS_POOL_KERNEL_ROUTINE* const MlasPoolVectorKernels[][3] =
     {
         MlasPool1DSlidingKernelMax,
         MlasPool2DSlidingKernelMax,
-        MlasPool3DVectorKernel<MLAS_MAXIMUM_POOLING>,
+        MlasPool3DSlidingKernelMax,
     },
     {
         MlasPool1DSlidingKernelAvgNoPad,
         MlasPool2DSlidingKernelAvgNoPad,
-        MlasPool3DVectorKernel<MLAS_AVERAGE_POOLING>,
+        MlasPool3DSlidingKernelAvgNoPad,
     },
     {
         MlasPool1DSlidingKernelAvgWithPad,
         MlasPool2DSlidingKernelAvgWithPad,
-        MlasPool3DVectorKernel<MLAS_AVERAGE_POOLING>,
+        MlasPool2DSlidingKernelAvgWithPad,
     },
+};
+
+static float const MlasPoolInitValues[3] =
+{
+    std::numeric_limits<float>::lowest(),
+    0,
+    0,
 };
 
 void
@@ -1224,29 +1231,9 @@ Return Value:
 
         PoolKernelRoutine = MlasPoolGlobalKernels[PoolingKind];
 
-    } else if ((Dimensions <= 2) && AllStridesAreOne && AllKernelsAreSmall) {
+    } else if (AllStridesAreOne && AllKernelsAreSmall) {
 
         PoolKernelRoutine = MlasPoolVectorKernels[PoolingKind][Dimensions - 1];
-
-    } else if (Dimensions == 3 && WorkBlock.StrideShape[Dimensions - 1] <= 2 && AllKernelsAreSmall) {
-
-        int64_t ReductionBufferRemaining = MLAS_POOL_REDUCTION_BUFFER_STACK - MLAS_POOL_REDUCTION_BUFFER_PADDING;
-
-        if (ReductionBufferRemaining >= WorkBlock.Padding[Dimensions - 1]) {
-            ReductionBufferRemaining -= WorkBlock.Padding[Dimensions - 1];
-        } else {
-            ReductionBufferRemaining = 0;
-        }
-
-        if (ReductionBufferRemaining >= WorkBlock.Padding[Dimensions * 2 - 1]) {
-            ReductionBufferRemaining -= WorkBlock.Padding[Dimensions * 2 - 1];
-        } else {
-            ReductionBufferRemaining = 0;
-        }
-
-        if (ReductionBufferRemaining >= int64_t(WorkBlock.InputShape[Dimensions - 1])) {
-            PoolKernelRoutine = MlasPoolVectorKernels[PoolingKind][Dimensions - 2];
-        }
     }
 
 #ifdef BUILD_MLAS_NO_ONNXRUNTIME
@@ -1262,8 +1249,13 @@ Return Value:
     // Use an external thread pool if one is provided.
     // TODO: change to use MlasExecuteThreaded
     onnxruntime::concurrency::ThreadPool::TryBatchParallelFor(ThreadPool, static_cast<ptrdiff_t>(TotalChannelCount), [&](ptrdiff_t c) {
-      PoolKernelRoutine(&WorkBlock, 1, Input + c * InputSize, Output + c * OutputSize);
-    }, 0);
+            float* pOutput = Output + c * OutputSize;
+
+            std::fill(pOutput, pOutput + OutputSize, MlasPoolInitValues[PoolingKind]);
+
+            PoolKernelRoutine(&WorkBlock, 1, Input + c * InputSize, pOutput);
+        },
+        0);
     return;
 #endif
 }
