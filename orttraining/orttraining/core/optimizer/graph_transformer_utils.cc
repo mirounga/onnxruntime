@@ -10,8 +10,6 @@
 #include "core/optimizer/bias_softmax_fusion.h"
 #include "core/optimizer/cast_elimination.h"
 #include "core/optimizer/common_subexpression_elimination.h"
-#include "core/optimizer/compute_optimizer/upstream_gather.h"
-#include "core/optimizer/compute_optimizer/upstream_reshape.h"
 #include "core/optimizer/concat_slice_elimination.h"
 #include "core/optimizer/constant_folding.h"
 #include "core/optimizer/constant_sharing.h"
@@ -53,7 +51,6 @@
 #include "orttraining/core/framework/distributed_run_context.h"
 #include "orttraining/core/optimizer/batchnorm_replacement.h"
 #include "orttraining/core/optimizer/bitmask_dropout_replacement.h"
-#include "orttraining/core/optimizer/compute_optimizer/sceloss_compute_optimization.h"
 #include "orttraining/core/optimizer/concat_replacement.h"
 #include "orttraining/core/optimizer/graph_transformer_registry.h"
 #include "orttraining/core/optimizer/insert_output_rewriter.h"
@@ -62,6 +59,15 @@
 #include "orttraining/core/optimizer/lstm_replacement.h"
 #include "orttraining/core/optimizer/transformer_layer_recompute.h"
 #include "orttraining/core/optimizer/qdq_fusion.h"
+#include "orttraining/core/optimizer/shape_optimizer.h"
+#include "orttraining/core/optimizer/transformer_layer_recompute.h"
+
+// Only enabled in full training build. Not in on device training builds
+#ifdef ENABLE_TRAINING
+#include "core/optimizer/compute_optimizer/upstream_gather.h"
+#include "core/optimizer/compute_optimizer/upstream_reshape.h"
+#include "orttraining/core/optimizer/compute_optimizer/sceloss_compute_optimization.h"
+#endif
 
 namespace onnxruntime {
 namespace training {
@@ -103,6 +109,8 @@ std::vector<std::unique_ptr<GraphTransformer>> GeneratePreTrainingTransformers(
       // CSE. For example, if A and B nodes both do Add operation with a same value but different initializers, by
       // default, CSE will not merge them, because the different initializers are represented by different NodeArg.
       transformers.emplace_back(std::make_unique<ConstantSharing>(compatible_eps));
+      // LayerNormFusion must be applied before CommonSubexpressionElimination as the latter will break the pattern when 2 LayerNormFusion share the same input.
+      transformers.emplace_back(std::make_unique<LayerNormFusion>(compatible_eps));
       // Remove duplicate nodes. Must be applied before any recompute transformations.
       if (config.gelu_recompute || config.attn_dropout_recompute || config.transformer_layer_recompute) {
         transformers.emplace_back(std::make_unique<CommonSubexpressionEliminationApplyOnce>(compatible_eps));
@@ -111,7 +119,6 @@ std::vector<std::unique_ptr<GraphTransformer>> GeneratePreTrainingTransformers(
       }
 
       transformers.emplace_back(std::make_unique<GeluFusion>(compatible_eps));
-      transformers.emplace_back(std::make_unique<LayerNormFusion>(compatible_eps));
 #if defined(USE_CUDA) || defined(USE_ROCM)
       transformers.emplace_back(std::make_unique<SimplifiedLayerNormFusion>(compatible_eps,
                                                                             true /* skip_device_check*/));
@@ -141,6 +148,10 @@ std::vector<std::unique_ptr<GraphTransformer>> GeneratePreTrainingTransformers(
       transformers.emplace_back(std::make_unique<ConstantFolding>(
           execution_provider, false /*skip_dequantize_linear*/, compatible_eps, excluded_initializers));
       transformers.emplace_back(std::make_unique<ReshapeFusion>(compatible_eps));
+      // Put fine-grained optimizer (e.g. ShapeOptimizer) after ReshapeFusion to avoid it breaks the strong patterns
+      // it defines. ReshapeFusion depends on subgraph pattern matching and do replacement accordingly, ShapeOptimizer
+      // potentially will optimize out some nodes defined in the subgraph patterns. So we put it after ReshapeFusion.
+      transformers.emplace_back(std::make_unique<ShapeOptimizer>(compatible_eps));
       transformers.emplace_back(std::make_unique<ConcatSliceElimination>(compatible_eps));
 
       if (config.gelu_recompute) {
@@ -162,6 +173,7 @@ std::vector<std::unique_ptr<GraphTransformer>> GeneratePreTrainingTransformers(
                                                                      cuda_execution_provider));
       }
 
+#ifdef ENABLE_TRAINING
       if (config.enable_compute_optimizer) {
         transformers.emplace_back(std::make_unique<UpStreamGatherGraphTransformer>(compatible_eps));
         if (config.enable_label_sparsity_optimization) {
@@ -169,6 +181,7 @@ std::vector<std::unique_ptr<GraphTransformer>> GeneratePreTrainingTransformers(
           transformers.emplace_back(std::make_unique<InsertGatherBeforeSceLoss>(compatible_eps));
         }
       }
+#endif
 
     } break;
 
