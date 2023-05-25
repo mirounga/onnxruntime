@@ -1269,7 +1269,7 @@ Return Value:
 
     *WorkingBufferSize = 0;
 
-    if (AllStridesAreOne && AllDilationsAreOne && (KernelShape[Dimensions - 1] <= 64)) {
+    if (AllStridesAreOne /*&& AllDilationsAreOne*/ && (KernelShape[Dimensions - 1] <= 64)) {
         Parameters->Dimensions = Dimensions;
         Parameters->Algorithm = MlasConvAlgorithmSlidingSum;
         return;
