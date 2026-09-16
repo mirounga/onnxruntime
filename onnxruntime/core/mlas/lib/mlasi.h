@@ -2029,6 +2029,78 @@ MlasConvDepthwiseMultiplier2CHWKernel7x7S2Avx512F(
     size_t OutputWidth,
     float Beta
     );
+
+//
+// Winograd F(4x4,3x3) NCHWc convolution support.
+//
+
+struct MLAS_WINOGRAD_WORK_BLOCK {
+    const float* Input;
+    float* Output;
+    const float* Bias;
+    float* V;
+    float* M;
+    size_t VCoeffStride;
+    size_t MCoeffStride;
+    size_t InputChannels;
+    size_t OutputChannels;
+    size_t InputHeight;
+    size_t InputWidth;
+    size_t OutputHeight;
+    size_t OutputWidth;
+    ptrdiff_t PaddingTop;
+    ptrdiff_t PaddingLeft;
+    size_t TilesW;
+    size_t TileBegin;
+    size_t TileCount;
+    bool Relu;
+};
+
+void
+MlasWinogradInputTransformAvx512F(
+    const MLAS_WINOGRAD_WORK_BLOCK* WorkBlock,
+    size_t Tile,
+    size_t InputBlock
+    );
+
+void
+MlasWinogradOutputTransformAvx512F(
+    const MLAS_WINOGRAD_WORK_BLOCK* WorkBlock,
+    size_t Tile,
+    size_t OutputBlock
+    );
+
+//
+// Fused one-level Strassen pointwise convolution support.
+//
+
+struct MLAS_STRASSEN_POINTWISE_PARAMS {
+    const float* InputA;            // first input quadrant, at the segment start
+    const float* InputB;            // optional second input quadrant (presum), or nullptr
+    bool SubtractInput;             // InputA - InputB instead of InputA + InputB
+    const float* Filter;            // prepacked combo blob for this filter set
+    float* Output1;                 // first destination C sub-tile
+    float* Output2;                 // optional second destination, or nullptr
+    bool Subtract1;
+    bool Subtract2;
+    bool Accumulate1;
+    bool Accumulate2;
+    const float* Bias1;             // per-destination bias slice (16*FilterCount), or nullptr
+    const float* Bias2;
+    bool Relu1;
+    bool Relu2;
+    size_t InputChannelBlocks;      // Cin/2 in 16-channel blocks
+    size_t FilterCount;             // 1..4 output blocks in this group
+    size_t InputStrideElements;     // elements between input channel-block planes
+    size_t OutputStrideElements;    // elements between output channel-block planes
+    size_t FilterStrideElements;    // elements between output blocks of a combo blob
+    size_t OutputCount;             // spatial positions in this segment
+};
+
+void
+MlasStrassenPointwiseKernelAvx512F(
+    const MLAS_STRASSEN_POINTWISE_PARAMS* Params
+    );
 #endif
 
 //

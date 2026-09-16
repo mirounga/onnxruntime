@@ -3,8 +3,11 @@
 
 #pragma once
 
+#include <mutex>
+
 #include "core/common/common.h"
 #include "core/framework/op_kernel.h"
+#include "core/framework/allocator.h"
 #include "core/providers/cpu/mlas_backend_kernel_selector_config_utils.h"
 #include "core/providers/cpu/nn/conv_attributes.h"
 #include "core/providers/cpu/nn/pool.h"
@@ -50,15 +53,36 @@ class NchwcConv final : public OpKernel {
     auto config_ops = info.GetConfigOptions().GetConfigEntry(kOrtSessionOptionsMlasGemmFastMathArm64Bfloat16);
     use_fastmath_mode_ = (config_ops == "1") && MlasBf16AccelerationSupported();
 #endif
+    winograd_enabled_ = mlas_backend_kernel_selector_config_.enable_conv_winograd &&
+                        MlasNchwcConvWinogradSupported() &&
+                        WinogradStaticEligible();
+    strassen_enabled_ = mlas_backend_kernel_selector_config_.enable_conv_strassen &&
+                        MlasNchwcConvStrassenSupported() &&
+                        StrassenStaticEligible();
   }
 
   Status Compute(OpKernelContext* context) const override;
 
  private:
+  bool WinogradStaticEligible() const;
+  Status EnsureWinogradFilter(const Tensor& W) const;
+  bool StrassenStaticEligible() const;
+
   ConvAttributes conv_attrs_;
 
   MLAS_ACTIVATION activation_;
   MLAS_BACKEND_KERNEL_SELECTOR_CONFIG mlas_backend_kernel_selector_config_;
+
+  // Winograd F(4x4,3x3) support: enabled by session config, statically
+  // eligible by attributes, with the transformed filter cached on first use.
+  bool winograd_enabled_{false};
+  mutable std::once_flag winograd_filter_once_;
+  mutable Status winograd_filter_status_;
+  mutable IAllocatorUniquePtr<void> winograd_transformed_filter_;
+
+  // Fused Strassen pointwise support. The weight combinations are formed
+  // transiently inside MLAS, so no transformed weight is cached here.
+  bool strassen_enabled_{false};
 
 #if defined(__aarch64__) && defined(__linux__)
   bool use_fastmath_mode_{false};

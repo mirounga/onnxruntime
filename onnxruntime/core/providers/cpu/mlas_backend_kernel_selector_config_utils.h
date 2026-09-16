@@ -34,6 +34,12 @@ inline void SetupMlasBackendKernelSelectorFromConfigOptions(MLAS_BACKEND_KERNEL_
                 "Invalid value for ", kOrtSessionOptionsMlasNchwcConvMaxInputChannelBatch,
                 ": ", *nchwc_conv_max_input_channel_batch, ". Expected a non-negative integer.");
   }
+
+  config.enable_conv_winograd =
+      config_options.GetConfigOrDefault(kOrtSessionOptionsMlasConvWinograd, "0") == "1";
+
+  config.enable_conv_strassen =
+      config_options.GetConfigOrDefault(kOrtSessionOptionsMlasConvStrassen, "0") == "1";
 }
 
 }  // namespace onnxruntime

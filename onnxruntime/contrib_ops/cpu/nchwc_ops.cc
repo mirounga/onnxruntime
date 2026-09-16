@@ -150,6 +150,80 @@ Status ReorderOutput::Compute(OpKernelContext* context) const {
   return Status::OK();
 }
 
+bool NchwcConv::WinogradStaticEligible() const {
+  // The Winograd path requires a 3x3 stride-1 dilation-1 group-1 convolution
+  // with pads of at most one per edge. All fused activations are supported
+  // (ReLU is folded, others run as an elementwise post-pass); the optional
+  // Sum input is checked at Compute time.
+  // N.B. The kernel shape itself is validated at Compute time where it is
+  // derived from the filter tensor shape.
+  if (conv_attrs_.group != 1) {
+    return false;
+  }
+  for (auto d : conv_attrs_.dilations) {
+    if (d != 1) {
+      return false;
+    }
+  }
+  for (auto s : conv_attrs_.strides) {
+    if (s != 1) {
+      return false;
+    }
+  }
+  for (auto p : conv_attrs_.pads) {
+    if (p < 0 || p > 1) {
+      return false;
+    }
+  }
+  return true;
+}
+
+Status NchwcConv::EnsureWinogradFilter(const Tensor& W) const {
+  const auto& W_shape = W.Shape();
+  const size_t output_channels = static_cast<size_t>(W_shape[0]);
+  const size_t input_channels = static_cast<size_t>(W_shape[1]);
+
+  AllocatorPtr alloc = Info().GetAllocator(OrtMemTypeDefault);
+  ORT_RETURN_IF(alloc == nullptr, "Failed to get allocator for Winograd filter transform");
+
+  const size_t transformed_size = MlasNchwcConvWinogradFilterTransformSize(
+      output_channels, input_channels, &mlas_backend_kernel_selector_config_);
+
+  winograd_transformed_filter_ = IAllocator::MakeUniquePtr<void>(alloc, transformed_size);
+
+  MlasNchwcConvWinogradFilterTransform(output_channels, input_channels, W.Data<float>(),
+                                       winograd_transformed_filter_.get(),
+                                       &mlas_backend_kernel_selector_config_);
+
+  return Status::OK();
+}
+
+bool NchwcConv::StrassenStaticEligible() const {
+  // The Strassen path requires a 1x1 stride-1 dilation-1 group-1 convolution
+  // with no padding. Kernel shape and spatial size are validated at Compute
+  // time. All fused activations are supported (ReLU folded, others as an
+  // elementwise post-pass); the optional Sum input is checked at Compute time.
+  if (conv_attrs_.group != 1) {
+    return false;
+  }
+  for (auto d : conv_attrs_.dilations) {
+    if (d != 1) {
+      return false;
+    }
+  }
+  for (auto s : conv_attrs_.strides) {
+    if (s != 1) {
+      return false;
+    }
+  }
+  for (auto p : conv_attrs_.pads) {
+    if (p != 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 Status NchwcConv::Compute(OpKernelContext* context) const {
   const auto* X = context->Input<Tensor>(0);
   const auto* W = context->Input<Tensor>(1);
@@ -200,6 +274,51 @@ Status NchwcConv::Compute(OpKernelContext* context) const {
     if (y_data.data() != sum_data.data()) {
       gsl::copy(sum_data, y_data);
     }
+  }
+
+  // Winograd F(4x4,3x3) path: opt-in, statically eligible by attributes, no
+  // Sum fusion, and a runtime shape/heuristic check. Falls through to the
+  // direct algorithm on any failure.
+  if (winograd_enabled_ && Sum == nullptr &&
+      kernel_shape[0] == 3 && kernel_shape[1] == 3 &&
+      dilations[0] == 1 && dilations[1] == 1 &&
+      strides[0] == 1 && strides[1] == 1 &&
+      MlasNchwcConvWinogradEligible(X_shape.GetDims().data(), Y_dims.data(), pads.data())) {
+    std::call_once(winograd_filter_once_, [&]() {
+      winograd_filter_status_ = EnsureWinogradFilter(*W);
+    });
+    if (winograd_filter_status_.IsOK()) {
+      MlasNchwcConvWinograd(
+          X_shape.GetDims().data(),
+          pads.data(),
+          Y_dims.data(),
+          X->Data<float>(),
+          winograd_transformed_filter_.get(),
+          B != nullptr ? B->Data<float>() : nullptr,
+          y_data.data(),
+          &activation_,
+          context->GetOperatorThreadPool(),
+          &mlas_backend_kernel_selector_config_);
+      return Status::OK();
+    }
+  }
+
+  // Fused Strassen path: opt-in, statically eligible by attributes, 1x1
+  // kernel, no Sum fusion, and a runtime shape check. Falls through to the
+  // direct algorithm on any failure.
+  if (strassen_enabled_ && Sum == nullptr &&
+      kernel_shape[0] == 1 && kernel_shape[1] == 1 &&
+      MlasNchwcConvStrassenEligible(X_shape.GetDims().data(), Y_dims.data())) {
+    MlasNchwcConvStrassen(
+        X_shape.GetDims().data(),
+        Y_dims.data(),
+        X->Data<float>(),
+        W->Data<float>(),
+        B != nullptr ? B->Data<float>() : nullptr,
+        y_data.data(),
+        &activation_,
+        context->GetOperatorThreadPool());
+    return Status::OK();
   }
 
 #if defined(__aarch64__) && defined(__linux__)

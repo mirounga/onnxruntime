@@ -209,6 +209,8 @@ struct MLAS_BACKEND_KERNEL_SELECTOR_CONFIG {
     bool use_kleidiai = true; /**< Flag to use KleidiAI backend kernels if available */
     size_t kleidiai_conv_igemm_max_work = 0; /**< Optional SME IGEMM route threshold override; 0 uses default */
     size_t nchwc_conv_max_input_channel_batch = 0; /**< Optional NCHWc pointwise conv input channel batch override; 0 uses default (128) */
+    bool enable_conv_winograd = false; /**< Opt-in enable for the NCHWc Winograd F(4x4,3x3) convolution algorithm */
+    bool enable_conv_strassen = false; /**< Opt-in enable for the NCHWc fused Strassen pointwise convolution algorithm */
 };
 
 //
@@ -1357,6 +1359,102 @@ MlasNchwcConv(
     MLAS_THREADPOOL* ThreadPool,
     const MLAS_BACKEND_KERNEL_SELECTOR_CONFIG* BackendKernelSelectorConfig,
     bool UseBf16
+    );
+
+//
+// Single precision NCHWc Winograd F(4x4,3x3) convolution routines.
+//
+// Supported iff MlasNchwcConvWinogradSupported() returns true (x86-64 with the
+// AVX-512 NCHWc block size of 16). Requirements: kernel 3x3, stride 1,
+// dilation 1, group 1, pads at most 1 per edge, input and output channels
+// multiples of the NCHWc block size, and fresh (zero mode) output semantics.
+// Results are numerically close to, but not bitwise identical with, the
+// direct convolution algorithm.
+//
+
+bool
+MLASCALL
+MlasNchwcConvWinogradSupported(
+    void
+    );
+
+size_t
+MLASCALL
+MlasNchwcConvWinogradFilterTransformSize(
+    size_t OutputChannels,
+    size_t InputChannels,
+    const MLAS_BACKEND_KERNEL_SELECTOR_CONFIG* BackendKernelSelectorConfig
+    );
+
+void
+MLASCALL
+MlasNchwcConvWinogradFilterTransform(
+    size_t OutputChannels,
+    size_t InputChannels,
+    const float* Filter,
+    void* TransformedFilter,
+    const MLAS_BACKEND_KERNEL_SELECTOR_CONFIG* BackendKernelSelectorConfig
+    );
+
+bool
+MLASCALL
+MlasNchwcConvWinogradEligible(
+    const int64_t* InputShape,
+    const int64_t* OutputShape,
+    const int64_t* Padding
+    );
+
+void
+MLASCALL
+MlasNchwcConvWinograd(
+    const int64_t* InputShape,
+    const int64_t* Padding,
+    const int64_t* OutputShape,
+    const float* Input,
+    const void* TransformedFilter,
+    const float* Bias,
+    float* Output,
+    const MLAS_ACTIVATION* Activation,
+    MLAS_THREADPOOL* ThreadPool,
+    const MLAS_BACKEND_KERNEL_SELECTOR_CONFIG* BackendKernelSelectorConfig
+    );
+
+//
+// Single precision NCHWc fused Strassen pointwise convolution routines.
+//
+// Supported iff MlasNchwcConvStrassenSupported() returns true. Requirements:
+// kernel 1x1, stride 1, no padding, dilation 1, group 1, input and output
+// channels multiples of twice the NCHWc block size, even spatial size, and
+// fresh (zero mode) output semantics. The filter is the ordinary OIHWBiBo
+// reordered weight; the algorithm forms its weight combinations transiently
+// and keeps no expanded copy. Results are numerically close to, but not
+// bitwise identical with, the direct algorithm.
+//
+
+bool
+MLASCALL
+MlasNchwcConvStrassenSupported(
+    void
+    );
+
+bool
+MLASCALL
+MlasNchwcConvStrassenEligible(
+    const int64_t* InputShape,
+    const int64_t* OutputShape
+    );
+
+void
+MLASCALL
+MlasNchwcConvStrassen(
+    const int64_t* InputShape,
+    const int64_t* OutputShape,
+    const float* Input,
+    const float* Filter,
+    const float* Bias,
+    float* Output,
+    const MLAS_ACTIVATION* Activation,
+    MLAS_THREADPOOL* ThreadPool
     );
 
 void

@@ -518,6 +518,24 @@ static const char* const kOrtSessionOptionsMlasKleidiAiConvIgemmMaxWork = "mlas.
 // This option exists for perf experimentation; the default may be retuned in future releases.
 static const char* const kOrtSessionOptionsMlasNchwcConvMaxInputChannelBatch = "mlas.nchwc_conv_max_input_channel_batch";
 
+// Opt-in enable for the MLAS NCHWc Winograd F(4x4,3x3) convolution algorithm on eligible
+// 3x3 stride-1 convolutions (x86-64 AVX-512 only). Winograd changes the floating point
+// evaluation order, so results are numerically close to but not bitwise identical with the
+// direct convolution algorithm.
+// Option values:
+// - "0": Disabled. [DEFAULT]
+// - "1": Enabled.
+static const char* const kOrtSessionOptionsMlasConvWinograd = "mlas.conv_winograd";
+
+// Opt-in enable for the MLAS NCHWc fused Strassen pointwise convolution algorithm on eligible
+// 1x1 stride-1 convolutions (x86-64 AVX-512 only). Strassen changes the floating point
+// evaluation order, so results are numerically close to but not bitwise identical with the
+// direct convolution algorithm.
+// Option values:
+// - "0": Disabled. [DEFAULT]
+// - "1": Enabled.
+static const char* const kOrtSessionOptionsMlasConvStrassen = "mlas.conv_strassen";
+
 // When converting DQ + MatMul -> MatMulNBits, the accuracy level of the MatMulNBits is controlled by this option.
 // Refer to MatMulNBits op schema for more details.
 // If not provided, default is 4.
