@@ -5,6 +5,8 @@
 #include "core/mlas/lib/mlasi.h"
 
 #include <array>
+#include <cmath>
+#include <cstring>
 #include <vector>
 
 #if defined(MLAS_TARGET_AMD64)
@@ -30,6 +32,10 @@ constexpr std::array<size_t, 27> kLongTestSizes = {
 
 bool IsGeluErfAvx512Dispatched() {
   return GetMlasPlatform().GeluErfKernelRoutine == MlasGeluErfKernelAvx512F;
+}
+
+bool IsGeluTanhAvx512Dispatched() {
+  return GetMlasPlatform().GeluTanhKernelRoutine == MlasGeluTanhKernelAvx512F;
 }
 
 bool IsSiluAvx512Dispatched() {
@@ -193,6 +199,91 @@ class MlasComputeGeluErfAvx512Test : public MlasTestBase {
   }
 };
 
+float GeluTanhReference(float x) {
+  const double v = x;
+  return static_cast<float>(0.5 * v * (1.0 + std::tanh(0.7978845608028654 * (v + 0.044715 * v * v * v))));
+}
+
+class MlasComputeGeluTanhAvx512Test : public MlasTestBase {
+ private:
+  MatrixGuardBuffer<float> input_buffer_;
+  MatrixGuardBuffer<float> generic_output_buffer_;
+  MatrixGuardBuffer<float> public_output_buffer_;
+  MatrixGuardBuffer<float> avx512_output_buffer_;
+
+  void ExecuteCommon(const std::vector<size_t>& sizes, size_t iterations) {
+    if (!IsGeluTanhAvx512Dispatched()) {
+      GTEST_SKIP() << "AVX512F GELU(tanh) dispatch is not available on this machine.";
+    }
+
+    for (size_t size : sizes) {
+      for (size_t iteration = 0; iteration < iterations; ++iteration) {
+        float* input = input_buffer_.GetBuffer(size);
+        float* generic_output = generic_output_buffer_.GetBuffer(size);
+        float* public_output = public_output_buffer_.GetBuffer(size);
+        float* avx512_output = avx512_output_buffer_.GetBuffer(size);
+
+        FillInput(input, size, kGeluMinValue, kGeluMaxValue, GetGeluSpecialValues(),
+                  static_cast<uint32_t>(size * 137u + iteration * 983u + 23u));
+
+        MlasGeluTanhKernel(input, generic_output, size);
+        MlasComputeGeluTanh(input, public_output, size);
+        MlasGeluTanhKernelAvx512F(input, avx512_output, size);
+
+        // The generic kernel computes 1 + tanh(u), which cancels for large negative inputs, so
+        // all three are compared against a double precision reference rather than each other.
+        for (size_t i = 0; i < size; ++i) {
+          const float expected = GeluTanhReference(input[i]);
+
+          ASSERT_TRUE(UnaryOutputsMatch(avx512_output[i], expected,
+                                        kGeluAbsoluteTolerance, kGeluRelativeTolerance, false))
+              << "GELU(tanh) mismatch at index " << i << " of " << size
+              << ", input=" << input[i]
+              << ", avx512=" << avx512_output[i]
+              << ", expected=" << expected
+              << ", abs_diff=" << std::fabs(avx512_output[i] - expected);
+
+          ASSERT_TRUE(UnaryOutputsMatch(public_output[i], expected,
+                                        kGeluAbsoluteTolerance, kGeluRelativeTolerance, false))
+              << "Public GELU(tanh) mismatch at index " << i << " of " << size
+              << ", input=" << input[i]
+              << ", public=" << public_output[i]
+              << ", expected=" << expected
+              << ", abs_diff=" << std::fabs(public_output[i] - expected);
+
+          ASSERT_TRUE(UnaryOutputsMatch(generic_output[i], expected,
+                                        kGeluAbsoluteTolerance, kGeluRelativeTolerance, false))
+              << "Generic GELU(tanh) mismatch at index " << i << " of " << size
+              << ", input=" << input[i]
+              << ", generic=" << generic_output[i]
+              << ", expected=" << expected
+              << ", abs_diff=" << std::fabs(generic_output[i] - expected);
+        }
+
+        // NaN inputs keep their bits, as in the exact kernel.
+        for (size_t i = 0; i < size; ++i) {
+          if (std::isnan(input[i])) {
+            ASSERT_EQ(0, std::memcmp(&avx512_output[i], &input[i], sizeof(float))) << "NaN at index " << i;
+          }
+        }
+      }
+    }
+  }
+
+ public:
+  static const char* GetTestSuiteName() {
+    return "TranscendentalAvx512GeluTanh";
+  }
+
+  void ExecuteShort() override {
+    ExecuteCommon(std::vector<size_t>(kShortTestSizes.begin(), kShortTestSizes.end()), 3);
+  }
+
+  void ExecuteLong() override {
+    ExecuteCommon(std::vector<size_t>(kLongTestSizes.begin(), kLongTestSizes.end()), 8);
+  }
+};
+
 class MlasComputeSiluAvx512Test : public MlasTestBase {
  private:
   MatrixGuardBuffer<float> input_buffer_;
@@ -268,9 +359,11 @@ static UNUSED_VARIABLE bool added_to_main = AddTestRegister([](bool is_short_exe
   size_t count = 0;
   if (is_short_execute) {
     count += MlasDirectShortExecuteTests<MlasComputeGeluErfAvx512Test>::RegisterShortExecute();
+    count += MlasDirectShortExecuteTests<MlasComputeGeluTanhAvx512Test>::RegisterShortExecute();
     count += MlasDirectShortExecuteTests<MlasComputeSiluAvx512Test>::RegisterShortExecute();
   } else {
     count += MlasLongExecuteTests<MlasComputeGeluErfAvx512Test>::RegisterLongExecute();
+    count += MlasLongExecuteTests<MlasComputeGeluTanhAvx512Test>::RegisterLongExecute();
     count += MlasLongExecuteTests<MlasComputeSiluAvx512Test>::RegisterLongExecute();
   }
   return count;

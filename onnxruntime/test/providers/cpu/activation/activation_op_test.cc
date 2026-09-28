@@ -5,7 +5,9 @@
 
 #include "activation_op_test.h"
 #include <limits>
+#include "core/framework/session_options.h"
 #include "core/providers/cpu/activation/activations.h"
+#include "core/session/onnxruntime_session_options_config_keys.h"
 #include "test/common/dnnl_op_test_utils.h"
 #include "test/common/cuda_op_test_utils.h"
 #include "test/common/tensor_op_test_utils.h"
@@ -899,6 +901,38 @@ TEST_F(ActivationOpTest, ONNX_Gelu) {
       },
       {},
       {{"approximate", "tanh"}}, true, 20);
+}
+
+// With mlas.gelu_tanh_approximation=1, the CPU EP computes exact Gelu nodes with the tanh approximation.
+// The inputs are where the two differ by 1.5e-4 to 4.4e-4, well above the output tolerance.
+static void RunGeluWithTanhApproximationOption(const char* domain, int opset, const char* approximate) {
+  const std::vector<float> X = {-3.0f, -2.5f, -1.5f, -1.0f, 0.0f, 1.0f, 1.5f, 2.5f, 3.0f};
+  std::vector<float> Y;
+  for (float x : X) {
+    const double v = x;
+    Y.push_back(static_cast<float>(0.5 * v * (1.0 + std::tanh(std::sqrt(2.0 / M_PI) * (v + 0.044715 * v * v * v)))));
+  }
+  const std::vector<int64_t> dims{static_cast<int64_t>(X.size())};
+
+  OpTester test("Gelu", opset, domain);
+  test.AddInput<float>("X", dims, X);
+  test.AddOutput<float>("Y", dims, Y, false, 1e-5f, 2e-5f);
+  if (approximate != nullptr) {
+    test.AddAttribute("approximate", std::string(approximate));
+  }
+
+  SessionOptions so;
+  ASSERT_STATUS_OK(so.config_options.AddConfigEntry(kOrtSessionOptionsMlasGeluTanhApproximation, "1"));
+  std::vector<std::unique_ptr<IExecutionProvider>> execution_providers;
+  execution_providers.push_back(DefaultCpuExecutionProvider());
+  test.Run(so, OpTester::ExpectResult::kExpectSuccess, "", {}, nullptr, &execution_providers);
+}
+
+TEST_F(ActivationOpTest, Gelu_TanhApproximationSessionOption) {
+  RunGeluWithTanhApproximationOption(kOnnxDomain, 20, "none");
+  RunGeluWithTanhApproximationOption(kOnnxDomain, 20, nullptr);
+  RunGeluWithTanhApproximationOption(kOnnxDomain, 20, "tanh");
+  RunGeluWithTanhApproximationOption(kMSDomain, 1, nullptr);
 }
 
 #if defined(MLAS_F16VEC_INTRINSICS_SUPPORTED)

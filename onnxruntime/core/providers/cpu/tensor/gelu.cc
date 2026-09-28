@@ -60,13 +60,9 @@ Status Gelu<T>::Compute(OpKernelContext* context) const {
   int64_t task_count = (elem_count + length_per_task - 1) / length_per_task;
 
   if (approximation_algorithm_ == "tanh") {
-    // FastGelu allows optional bias. Here we split input data into chunks. Each chunk
-    // has N elements (except the last chunk), and use thread pool to parallel chunks.
-    // N = 4096 is selected based on performance test results on input shape 1x128x768.
-    // FastGelu uses approximation for Gelu. The formula is 0.5 * (1 + Tanh(x * (C * x * x + B))) * x.
-    static constexpr float B = 0.7978845608028654f;    // sqrt(2.0 / M_PI)
-    static constexpr float C = 0.035677408136300125f;  // 0.044715 * sqrt(2.0 / M_PI)
-
+    // Split the data into chunks of N elements (except the last chunk) and use the thread pool to
+    // process chunks in parallel. N = 4096 is selected based on performance test results on input
+    // shape 1x128x768. The formula is 0.5 * x * (1 + Tanh(sqrt(2 / pi) * (x + 0.044715 * x^3))).
     concurrency::ThreadPool::TryBatchParallelFor(
         tp, static_cast<int32_t>(task_count),
         [&](ptrdiff_t task_idx) {
@@ -75,16 +71,9 @@ Status Gelu<T>::Compute(OpKernelContext* context) const {
           T* p_output = output_data + start;
           int64_t count = std::min(length_per_task, elem_count - start);
 
-          for (int64_t i = 0; i < count; i++) {
-            T value = p_input[i];
-            p_output[i] = value * (static_cast<T>(C) * value * value + static_cast<T>(B));
-          }
-
-          MlasComputeTanh(p_output, p_output, narrow<size_t>(count));
-
-          for (int64_t i = 0; i < count; i++) {
-            p_output[i] = 0.5f * p_input[i] * (p_output[i] + 1.0f);
-          }
+          // MlasComputeGeluTanh requires distinct input/output buffers. This
+          // call uses disjoint slices from the input and output tensors.
+          MlasComputeGeluTanh(p_input, p_output, narrow<size_t>(count));
         },
         0);
     return Status::OK();

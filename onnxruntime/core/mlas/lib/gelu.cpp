@@ -10,7 +10,8 @@ Module Name:
 
 Abstract:
 
-    This module implements routines to compute the exact Gelu function.
+    This module implements routines to compute the exact Gelu function and
+    its tanh approximation.
 
 --*/
 
@@ -56,6 +57,47 @@ MlasComputeGeluErf(
     GetMlasPlatform().GeluErfKernelRoutine(Input, Output, N);
 #else
     MlasGeluErfKernel(Input, Output, N);
+#endif
+}
+
+void
+MLASCALL
+MlasGeluTanhKernel(
+    const float* Input,
+    float* Output,
+    size_t N
+    )
+{
+    // Like MlasGeluErfKernel, this kernel runs in multiple passes over Output
+    // and is not buffer alias safe. It performs the same operations as the
+    // CPU Gelu operator's approximate="tanh" path did before it called this
+    // routine, so the results are unchanged on platforms that use it.
+    constexpr float B = 0.7978845608028654f;    // sqrt(2 / pi)
+    constexpr float C = 0.035677408136300125f;  // 0.044715 * sqrt(2 / pi)
+
+    for (size_t i = 0; i < N; ++i) {
+        Output[i] = Input[i] * (C * Input[i] * Input[i] + B);
+    }
+
+    MlasComputeTanh(Output, Output, N);
+
+    for (size_t i = 0; i < N; ++i) {
+        Output[i] = 0.5f * Input[i] * (Output[i] + 1.0f);
+    }
+}
+
+void
+MLASCALL
+MlasComputeGeluTanh(
+    const float* Input,
+    float* Output,
+    size_t N
+    )
+{
+#if defined(MLAS_TARGET_AMD64) || defined(MLAS_TARGET_RISCV64)
+    GetMlasPlatform().GeluTanhKernelRoutine(Input, Output, N);
+#else
+    MlasGeluTanhKernel(Input, Output, N);
 #endif
 }
 

@@ -54,6 +54,18 @@ DispatchedUnaryPathInfo GetGeluErfDispatchPathInfo() {
   return {kGeluUnfusedBytesPerElement, "generic_fallback"};
 }
 
+DispatchedUnaryPathInfo GetGeluTanhDispatchPathInfo() {
+#if defined(MLAS_TARGET_AMD64)
+  if (GetMlasPlatform().GeluTanhKernelRoutine == MlasGeluTanhKernelAvx512F) {
+    return {kFusedBytesPerElement, "avx512_fused"};
+  }
+#endif
+
+  // The generic GELU(tanh) implementation uses separate polynomial, tanh, and
+  // final passes, like the generic exact path.
+  return {kGeluUnfusedBytesPerElement, "generic_fallback"};
+}
+
 std::vector<float> MakeInput(size_t n, float min_value, float max_value) {
   auto data = RandomVectorUniform<float>(n, min_value, max_value);
 
@@ -183,9 +195,23 @@ void BM_GeluErfUnfusedExact(benchmark::State& state) {
       kGeluUnfusedBytesPerElement);
 }
 
+void BM_GeluTanhDispatch(benchmark::State& state) {
+  // Fused MLAS GELU(tanh) entry point. On AMD64 this goes through the platform
+  // dispatch layer and may select an architecture-specific implementation.
+  RunDispatchedUnaryBenchmark(
+      state,
+      [](const float* input, float* output, size_t n) {
+        MlasComputeGeluTanh(input, output, n);
+      },
+      kGeluMinValue,
+      kGeluMaxValue,
+      GetGeluTanhDispatchPathInfo());
+}
+
 }  // namespace
 
 BENCHMARK(BM_SiluDispatch)->Apply(UnaryKernelArgs)->UseRealTime();
 BENCHMARK(BM_SiluUnfusedDispatch)->Apply(UnaryKernelArgs)->UseRealTime();
 BENCHMARK(BM_GeluErfDispatchExact)->Apply(UnaryKernelArgs)->UseRealTime();
 BENCHMARK(BM_GeluErfUnfusedExact)->Apply(UnaryKernelArgs)->UseRealTime();
+BENCHMARK(BM_GeluTanhDispatch)->Apply(UnaryKernelArgs)->UseRealTime();

@@ -608,6 +608,18 @@ static const char* const kOrtSessionOptionsMlasKleidiAiConvIgemmMaxWork = "mlas.
 // This option exists for perf experimentation; the default may be retuned in future releases.
 static const char* const kOrtSessionOptionsMlasNchwcPointwiseConvMaxInputChannelBatch = "mlas.nchwc_pointwise_conv_max_input_channel_batch";
 
+// Compute exact (erf) GELU with the tanh approximation on the CPU execution provider:
+//     GELU(x) ~= 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))
+// This applies to Gelu nodes (ONNX Gelu and com.microsoft.Gelu) whose "approximate" attribute is
+// "none" or absent; nodes that already request "tanh" are unaffected. BiasGelu and FastGelu are not
+// affected. The tanh approximation differs from exact GELU by at most about 5e-4 in absolute value
+// and is faster to compute, notably with AVX-512. It changes model outputs, so validate model quality
+// before enabling it.
+// Option values:
+// - "0": Compute each Gelu node with the algorithm it specifies. [DEFAULT]
+// - "1": Compute exact Gelu nodes with the tanh approximation.
+static const char* const kOrtSessionOptionsMlasGeluTanhApproximation = "mlas.gelu_tanh_approximation";
+
 // When converting DQ + MatMul -> MatMulNBits, the accuracy level of the MatMulNBits is controlled by this option.
 // Refer to MatMulNBits op schema for more details.
 // If not provided, default is 4.

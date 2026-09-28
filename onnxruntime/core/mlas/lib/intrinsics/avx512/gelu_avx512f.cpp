@@ -10,8 +10,8 @@ Module Name:
 
 Abstract:
 
-    This module implements routines to compute exact Gelu with AVX512F
-    intrinsics.
+    This module implements routines to compute exact Gelu and its tanh
+    approximation with AVX512F intrinsics.
 
 --*/
 
@@ -55,6 +55,13 @@ struct GeluAvx512Constants {
     static constexpr float ExpP5 = 1.0f;
     static constexpr float ExpP6 = 1.0f;
     static constexpr float ExpC = 1.25829120e+7f;
+
+    // tanh approximation: -2 * sqrt(2/pi) and -2 * 0.044715 * sqrt(2/pi).
+    static constexpr float TanhNegTwoB = -1.5957691216057308f;
+    static constexpr float TanhNegTwoC = -0.07135481627225025f;
+    // exp() overflows to +inf above ~88.7; clamping at 128 keeps the range
+    // reduction finite while still overflowing.
+    static constexpr float TanhExpUpperRange = 128.0f;
 };
 
 struct GeluAvx512BroadcastConstants {
@@ -91,6 +98,9 @@ struct GeluAvx512BroadcastConstants {
     const __m512 ExpP5 = _mm512_set1_ps(GeluAvx512Constants::ExpP5);
     const __m512 ExpP6 = _mm512_set1_ps(GeluAvx512Constants::ExpP6);
     const __m512 ExpC = _mm512_set1_ps(GeluAvx512Constants::ExpC);
+    const __m512 TanhNegTwoB = _mm512_set1_ps(GeluAvx512Constants::TanhNegTwoB);
+    const __m512 TanhNegTwoC = _mm512_set1_ps(GeluAvx512Constants::TanhNegTwoC);
+    const __m512 TanhExpUpperRange = _mm512_set1_ps(GeluAvx512Constants::TanhExpUpperRange);
 };
 
 MLAS_FORCEINLINE __m512
@@ -205,6 +215,65 @@ MlasGeluErfKernelAvx512FExactImpl(
     }
 }
 
+MLAS_FORCEINLINE __m512
+MlasComputeGeluVectorTanhAvx512(
+    __m512 X,
+    const GeluAvx512BroadcastConstants& Constants
+    )
+{
+    //
+    // 0.5 * (1 + tanh(u)) = 1 / (1 + exp(-2u)), so with
+    // u = sqrt(2/pi) * (x + 0.044715 * x^3):
+    //
+    //     GELU(x) = x / (1 + exp(-2u))
+    //
+    // This is one pass with a single exponential instead of a tanh evaluation.
+    //
+    // The exponential's input is clamped from below so it stays finite, and from
+    // above so it overflows to +inf. For large negative x the result is then
+    // x / inf = -0, and for x = -inf it is NaN, as in the tanh formulation.
+    //
+
+    const __m512 NegTwoU = _mm512_mul_ps(X, _mm512_fmadd_ps(Constants.TanhNegTwoC, _mm512_mul_ps(X, X), Constants.TanhNegTwoB));
+    const __m512 ExpInput = _mm512_min_ps(_mm512_max_ps(Constants.ExpLowerRange, NegTwoU), Constants.TanhExpUpperRange);
+    const __m512 ExpValue = MlasGeluErfExpVectorAvx512(ExpInput, Constants);
+    __m512 Result = _mm512_div_ps(X, _mm512_add_ps(Constants.One, ExpValue));
+
+    // Propagate NaN inputs unchanged, as the exact kernel does.
+    const __mmask16 NaNMask = _mm512_cmp_ps_mask(X, X, _CMP_UNORD_Q);
+    Result = _mm512_mask_mov_ps(Result, NaNMask, X);
+
+    return Result;
+}
+
+void
+MlasGeluTanhKernelAvx512FImpl(
+    const float* Input,
+    float* Output,
+    size_t N
+    )
+{
+    const GeluAvx512BroadcastConstants Constants;
+    while (N >= 16) {
+        const __m512 X = _mm512_loadu_ps(Input);
+        const __m512 Result = MlasComputeGeluVectorTanhAvx512(X, Constants);
+
+        _mm512_storeu_ps(Output, Result);
+
+        Input += 16;
+        Output += 16;
+        N -= 16;
+    }
+
+    if (N > 0) {
+        const __mmask16 TailMask = __mmask16((1u << static_cast<unsigned>(N)) - 1u);
+        const __m512 X = _mm512_maskz_loadu_ps(TailMask, Input);
+        const __m512 Result = MlasComputeGeluVectorTanhAvx512(X, Constants);
+
+        _mm512_mask_storeu_ps(Output, TailMask, Result);
+    }
+}
+
 void
 MlasErfKernelAvx512FImpl(
     const float* Input,
@@ -244,6 +313,17 @@ MlasGeluErfKernelAvx512F(
     )
 {
     MlasGeluErfKernelAvx512FExactImpl(Input, Output, N);
+}
+
+void
+MLASCALL
+MlasGeluTanhKernelAvx512F(
+    const float* Input,
+    float* Output,
+    size_t N
+    )
+{
+    MlasGeluTanhKernelAvx512FImpl(Input, Output, N);
 }
 
 void

@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "core/session/onnxruntime_session_options_config_keys.h"
+
 namespace onnxruntime {
 
 template <typename T>
@@ -10,6 +12,11 @@ class Gelu final : public OpKernel {
  public:
   explicit Gelu(const OpKernelInfo& info) : OpKernel(info) {
     approximation_algorithm_ = info.GetAttrOrDefault<std::string>("approximate", "none");
+    // The session can opt into computing exact Gelu with the tanh approximation.
+    if (approximation_algorithm_ == "none" &&
+        info.GetConfigOptions().GetConfigOrDefault(kOrtSessionOptionsMlasGeluTanhApproximation, "0") == "1") {
+      approximation_algorithm_ = "tanh";
+    }
   }
   Status Compute(OpKernelContext* ctx) const override;
 

@@ -1199,6 +1199,21 @@ MlasComputeGeluErf(
     );
 
 //
+// Computes the tanh approximation of GELU:
+//     Output[i] = 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))
+//
+// Note: The Input and Output buffers for MlasComputeGeluTanh must not overlap.
+// In-place operation (e.g., passing the same buffer for both parameters) is unsupported.
+//
+void
+MLASCALL
+MlasComputeGeluTanh(
+    const float* Input,
+    float* Output,
+    size_t N
+    );
+
+//
 // Note: The Input and Output buffers for MlasComputeSilu must not overlap.
 // In-place operation (e.g., passing the same buffer for both parameters) is unsupported.
 //

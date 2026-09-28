@@ -1413,6 +1413,7 @@ extern "C" {
 
     MLAS_COMPUTE_UNARY_FLOAT_KERNEL MlasErfKernel;
     MLAS_COMPUTE_UNARY_FLOAT_KERNEL MlasGeluErfKernel;
+    MLAS_COMPUTE_UNARY_FLOAT_KERNEL MlasGeluTanhKernel;
     MLAS_COMPUTE_UNARY_FLOAT_KERNEL MlasSiluKernel;
     MLAS_COMPUTE_UNARY_FLOAT_KERNEL MlasComputeExpF32Kernel;
     MLAS_COMPUTE_UNARY_FLOAT_KERNEL MlasLogisticKernel;
@@ -1448,6 +1449,7 @@ extern "C" {
     MLAS_QUANTIZE_LINEAR_S8_KERNEL MlasQuantizeLinearS8KernelAvx512F;
     MLAS_QUANTIZE_LINEAR_U8_KERNEL MlasQuantizeLinearU8KernelAvx512F;
     MLAS_COMPUTE_UNARY_FLOAT_KERNEL MlasGeluErfKernelAvx512F;
+    MLAS_COMPUTE_UNARY_FLOAT_KERNEL MlasGeluTanhKernelAvx512F;
     MLAS_COMPUTE_UNARY_FLOAT_KERNEL MlasErfKernelAvx512F;
     MLAS_COMPUTE_UNARY_FLOAT_KERNEL MlasSiluKernelAvx512F;
 #endif
@@ -1914,6 +1916,7 @@ struct MLAS_PLATFORM {
     // changes won't produce duplicate-member errors. Each platform's init code
     // assigns these fields independently in platform.cpp.
     MLAS_COMPUTE_UNARY_FLOAT_KERNEL* GeluErfKernelRoutine;
+    MLAS_COMPUTE_UNARY_FLOAT_KERNEL* GeluTanhKernelRoutine;
     MLAS_COMPUTE_UNARY_FLOAT_KERNEL* SiluKernelRoutine;
 #endif
 
@@ -1932,7 +1935,7 @@ MLAS_COMPUTE_GELU_FP16_KERNEL* GeluFP16KernelRoutine = nullptr;
 MLAS_COMPUTE_TANH_FP16_KERNEL* TanhFP16KernelRoutine = nullptr;
 
 #if defined(MLAS_TARGET_AMD64)
-    // GeluErfKernelRoutine / SiluKernelRoutine / TanhKernelRoutine /
+    // GeluErfKernelRoutine / GeluTanhKernelRoutine / SiluKernelRoutine / TanhKernelRoutine /
     // ComputeExpF32Kernel are declared in the shared AMD64+RISCV64 block above.
     MLAS_SGEMM_KERNEL_M1_ROUTINE* KernelM1Routine;
     MLAS_SGEMM_KERNEL_M1_ROUTINE* KernelM1TransposeBRoutine;

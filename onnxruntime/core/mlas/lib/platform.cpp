@@ -343,6 +343,7 @@ Return Value:
     this->ErfKernelRoutine = MlasErfKernel;
     this->LogisticKernelRoutine = MlasLogisticKernel;
     this->GeluErfKernelRoutine = MlasGeluErfKernel;
+    this->GeluTanhKernelRoutine = MlasGeluTanhKernel;
     this->SiluKernelRoutine = MlasSiluKernel;
     this->TanhKernelRoutine = MlasTanhKernel;
     this->ComputeExpF32Kernel = MlasComputeExpF32Kernel;
@@ -436,6 +437,7 @@ Return Value:
     this->PoolFloatKernel[MlasAveragePoolingIncludePad] = MlasPoolAverageIncludePadFloatKernelSse;
     this->ComputeExpF32Kernel = MlasComputeExpF32Kernel;
     this->GeluErfKernelRoutine = MlasGeluErfKernel;
+    this->GeluTanhKernelRoutine = MlasGeluTanhKernel;
     this->LogisticKernelRoutine = MlasLogisticKernel;
     this->SiluKernelRoutine = MlasSiluKernel;
     this->TanhKernelRoutine = MlasTanhKernel;
@@ -622,6 +624,7 @@ Return Value:
 
                 if (((Cpuid7[1] & 0x10000) != 0) && ((xcr0 & 0xE0) == 0xE0)) {
                     this->GeluErfKernelRoutine = MlasGeluErfKernelAvx512F;
+                    this->GeluTanhKernelRoutine = MlasGeluTanhKernelAvx512F;
                     this->ErfKernelRoutine = MlasErfKernelAvx512F;
                     this->SiluKernelRoutine = MlasSiluKernelAvx512F;
                     this->GemmFloatKernel = MlasGemmFloatKernelAvx512F;
